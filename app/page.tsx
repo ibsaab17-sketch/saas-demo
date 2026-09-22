@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const menu = [
   "Dashboard",
@@ -47,6 +47,19 @@ function Card({
 
 export default function Home() {
   const [active, setActive] = useState("Dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
+  const selectSection = (item: string) => {
+    setActive(item);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -61,7 +74,7 @@ export default function Home() {
             {menu.map((item) => (
               <button
                 key={item}
-                onClick={() => setActive(item)}
+                onClick={() => selectSection(item)}
                 className={`w-full rounded-lg px-4 py-3 text-left text-sm transition ${
                   active === item
                     ? "bg-blue-600 text-white"
@@ -79,23 +92,80 @@ export default function Home() {
           </div>
         </aside>
 
-        <main className="flex-1">
-          <header className="border-b border-slate-200 bg-white px-6 py-4 md:px-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">{active}</h2>
-                <p className="text-sm text-slate-500">
-                  Demo Business • Customer demonstration
-                </p>
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation menu"
+              className="absolute inset-0 bg-slate-950/60"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <aside className="relative z-10 flex h-full w-[min(82vw,20rem)] flex-col bg-slate-950 text-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
+                <div>
+                  <h1 className="text-lg font-bold">BusinessFlow</h1>
+                  <p className="mt-1 text-xs text-slate-400">Business Management</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close navigation menu"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-2xl text-slate-300 hover:bg-slate-800 hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+                {menu.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => selectSection(item)}
+                    className={`w-full rounded-lg px-4 py-3 text-left text-sm transition ${
+                      active === item
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </nav>
+              <div className="border-t border-slate-800 p-5">
+                <p className="text-sm font-medium">Demo Business</p>
+                <p className="text-xs text-slate-400">Customer Preview</p>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        <main className="min-w-0 flex-1">
+          <header className="border-b border-slate-200 bg-white px-4 py-3 sm:px-6 md:px-8 md:py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Open navigation menu"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-xl hover:bg-slate-50 md:hidden"
+                >
+                  ☰
+                </button>
+                <div className="min-w-0">
+                  <h1 className="truncate text-base font-bold md:hidden">BusinessFlow</h1>
+                  <h2 className="hidden text-xl font-semibold md:block">{active}</h2>
+                  <p className="hidden text-sm text-slate-500 md:block">
+                    Demo Business • Customer demonstration
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium">
+              <div className="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-xs font-medium sm:px-4 sm:text-sm">
                 Demo Account
               </div>
             </div>
           </header>
 
-          <div className="p-6 md:p-8">
+          <div className="p-4 sm:p-6 md:p-8">
             {active === "Dashboard" && (
               <>
                 <div className="mb-8">
@@ -145,7 +215,24 @@ export default function Home() {
                     </button>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {transactions.map((transaction) => (
+                      <div key={transaction.customer} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-semibold">{transaction.customer}</p>
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            {transaction.status}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                          <div><p className="text-xs text-slate-500">Amount</p><p className="mt-1 font-medium">{transaction.amount}</p></div>
+                          <div><p className="text-xs text-slate-500">Rate</p><p className="mt-1 font-medium">{transaction.rate}</p></div>
+                          <div><p className="text-xs text-slate-500">Total</p><p className="mt-1 font-medium">{transaction.total}</p></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-slate-50 text-slate-500">
                         <tr>
@@ -184,20 +271,31 @@ export default function Home() {
 
             {active === "Customers" && (
               <section>
-                <div className="mb-6 flex items-center justify-between">
+                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-2xl font-bold">Customers</h2>
                     <p className="text-slate-500">
                       Manage your business customers.
                     </p>
                   </div>
-                  <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
+                  <button className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white sm:w-auto sm:py-2">
                     + Add Customer
                   </button>
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full text-left text-sm">
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {customers.map((customer) => (
+                      <div key={customer.email} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0"><p className="font-semibold">{customer.name}</p><p className="mt-1 break-all text-sm text-slate-500">{customer.email}</p></div>
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">{customer.status}</span>
+                        </div>
+                        <div className="mt-4"><p className="text-xs text-slate-500">Transactions</p><p className="mt-1 font-medium">{customer.transactions}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                  <table className="hidden w-full text-left text-sm md:table">
                     <thead className="bg-slate-50 text-slate-500">
                       <tr>
                         <th className="p-4">Customer</th>
@@ -230,20 +328,28 @@ export default function Home() {
 
             {active === "Transactions" && (
               <section>
-                <div className="mb-6 flex items-center justify-between">
+                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-2xl font-bold">Transactions</h2>
                     <p className="text-slate-500">
                       Review and manage transaction activity.
                     </p>
                   </div>
-                  <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
+                  <button className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white sm:w-auto sm:py-2">
                     + New Transaction
                   </button>
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full text-left text-sm">
+                  <div className="divide-y divide-slate-100 md:hidden">
+                    {transactions.map((transaction) => (
+                      <div key={transaction.customer} className="p-4">
+                        <div className="flex items-start justify-between gap-3"><p className="font-semibold">{transaction.customer}</p><span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{transaction.status}</span></div>
+                        <div className="mt-4 grid grid-cols-3 gap-3 text-sm"><div><p className="text-xs text-slate-500">Amount</p><p className="mt-1 font-medium">{transaction.amount}</p></div><div><p className="text-xs text-slate-500">Rate</p><p className="mt-1 font-medium">{transaction.rate}</p></div><div><p className="text-xs text-slate-500">Total</p><p className="mt-1 font-medium">{transaction.total}</p></div></div>
+                      </div>
+                    ))}
+                  </div>
+                  <table className="hidden w-full text-left text-sm md:table">
                     <thead className="bg-slate-50 text-slate-500">
                       <tr>
                         <th className="p-4">Customer</th>
@@ -377,7 +483,7 @@ export default function Home() {
                 </p>
 
                 <div className="mt-6 max-w-2xl rounded-xl border border-blue-200 bg-white p-6 shadow-sm">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm text-slate-500">Current Plan</p>
                       <h3 className="mt-1 text-2xl font-bold">Professional</h3>
