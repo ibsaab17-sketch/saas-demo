@@ -1,7 +1,7 @@
 import type { Customer, Recipient, Transaction } from "./types";
 
 /**
- * SYNTHETIC DEMO FIXTURES — not real people, accounts or transfers.
+ * SYNTHETIC DEMO FIXTURES - not real people, accounts or transfers.
  *
  * Only the demo data service imports this file. Presentation components
  * must go through the services so this can be swapped for a database.
@@ -91,8 +91,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Family support",
     },
     sendAmountCad: 400,
+    amountConvertedCad: 400,
     exchangeRate: 95.5,
     feeCad: 4.99,
+    feeIncludedInAmount: false,
     totalCad: 404.99,
     receiveAmountEtb: 38200,
     deliverySpeed: "standard",
@@ -114,8 +116,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Business payment",
     },
     sendAmountCad: 1250,
+    amountConvertedCad: 1250,
     exchangeRate: 95.5,
     feeCad: 9.99,
+    feeIncludedInAmount: false,
     totalCad: 1259.99,
     receiveAmountEtb: 119375,
     deliverySpeed: "express",
@@ -137,8 +141,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Education",
     },
     sendAmountCad: 750,
+    amountConvertedCad: 750,
     exchangeRate: 94.8,
     feeCad: 4.99,
+    feeIncludedInAmount: false,
     totalCad: 754.99,
     receiveAmountEtb: 71100,
     deliverySpeed: "standard",
@@ -160,8 +166,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Family support",
     },
     sendAmountCad: 300,
+    amountConvertedCad: 300,
     exchangeRate: 94.25,
     feeCad: 4.99,
+    feeIncludedInAmount: false,
     totalCad: 304.99,
     receiveAmountEtb: 28275,
     deliverySpeed: "standard",
@@ -183,8 +191,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Education",
     },
     sendAmountCad: 200,
+    amountConvertedCad: 200,
     exchangeRate: 93.9,
     feeCad: 4.99,
+    feeIncludedInAmount: false,
     totalCad: 204.99,
     receiveAmountEtb: 18780,
     deliverySpeed: "standard",
@@ -206,8 +216,10 @@ export const demoTransactions: Transaction[] = [
       sendingReason: "Family support",
     },
     sendAmountCad: 500,
+    amountConvertedCad: 500,
     exchangeRate: 93.4,
     feeCad: 9.99,
+    feeIncludedInAmount: false,
     totalCad: 509.99,
     receiveAmountEtb: 46700,
     deliverySpeed: "express",

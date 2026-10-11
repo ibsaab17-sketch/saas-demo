@@ -1,33 +1,80 @@
-import { DEMO_EXCHANGE_RATE_ETB_PER_CAD, DEMO_FEE_OPTIONS } from "../config";
 import { calculateQuote } from "../quote";
 import type { DeliverySpeed, FeeOption, Quote } from "../types";
+import { getSupabaseCurrentFee } from "./supabase-fee-service";
+import { getSupabaseCurrentRate } from "./supabase-rate-service";
 
-/**
- * RateService — exchange rate and fee lookup.
- *
- * PRODUCTION: fetch the current rate/fees from the server (never trust a
- * client-provided rate), and re-validate the quote server-side on submit.
- */
 export interface RateService {
-  getCurrentRate(): Promise<{ rate: number; asOf: string; isDemoRate: true }>;
+  getCurrentRate(): Promise<{
+    rate: number;
+    asOf: string;
+    isDemoRate: boolean;
+  }>;
+
   getFeeOptions(): Promise<FeeOption[]>;
-  getQuote(sendAmountCad: number, deliverySpeed: DeliverySpeed): Promise<Quote>;
+
+  getQuote(
+    sendAmountCad: number,
+    deliverySpeed: DeliverySpeed,
+  ): Promise<Quote>;
 }
 
-export const demoRateService: RateService = {
+export const rateService: RateService = {
+  /**
+   * Get the current exchange rate configured by the customer's business.
+   */
   async getCurrentRate() {
+    const currentRate = await getSupabaseCurrentRate();
+
     return {
-      rate: DEMO_EXCHANGE_RATE_ETB_PER_CAD,
-      asOf: new Date().toISOString(),
-      isDemoRate: true,
+      rate: currentRate.rate,
+      asOf: currentRate.asOf,
+      isDemoRate: false,
     };
   },
+
+  /**
+   * Get the current transfer fee configured by the customer's business.
+   *
+   * We temporarily keep the existing FeeOption structure so the rest
+   * of the customer portal continues working while we transition away
+   * from the old demo delivery-speed fee system.
+   */
   async getFeeOptions() {
-    return DEMO_FEE_OPTIONS;
+    const currentFee = await getSupabaseCurrentFee();
+
+    const feeOptions: FeeOption[] = [
+      {
+        id: "standard",
+        label: "Standard",
+        description: "Business transfer fee",
+        feeCad: currentFee.feeCad,
+      },
+      {
+        id: "express",
+        label: "Express",
+        description: "Business transfer fee",
+        feeCad: currentFee.feeCad,
+      },
+    ];
+
+    return feeOptions;
   },
+
+  /**
+   * Build a quote using both the current business exchange rate
+   * and the current business transfer fee from Supabase.
+   */
   async getQuote(sendAmountCad, deliverySpeed) {
-    return calculateQuote(sendAmountCad, deliverySpeed, DEMO_EXCHANGE_RATE_ETB_PER_CAD);
+    const [currentRate, currentFee] = await Promise.all([
+      getSupabaseCurrentRate(),
+      getSupabaseCurrentFee(),
+    ]);
+
+    return calculateQuote(
+      sendAmountCad,
+      deliverySpeed,
+      currentRate.rate,
+      currentFee.feeCad,
+    );
   },
 };
-
-export const rateService: RateService = demoRateService;

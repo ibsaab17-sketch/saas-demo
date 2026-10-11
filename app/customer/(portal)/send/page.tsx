@@ -1,30 +1,72 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { PageHeader } from "../../_components/PortalShell";
 import { QuoteSummary } from "../../_components/QuoteSummary";
-import { quoteFromInput, RateCalculator } from "../../_components/RateCalculator";
+import {
+  quoteFromInput,
+  RateCalculator,
+} from "../../_components/RateCalculator";
 import { RecipientForm } from "../../_components/RecipientForm";
-import { bankNameFor, RecipientPicker } from "../../_components/RecipientPicker";
+import {
+  bankNameFor,
+  RecipientPicker,
+} from "../../_components/RecipientPicker";
 import { StepIndicator } from "../../_components/StepIndicator";
 import { Alert } from "../../_components/ui/Alert";
-import { Button, ButtonLink } from "../../_components/ui/Button";
+import {
+  Button,
+  ButtonLink,
+} from "../../_components/ui/Button";
 import { Card } from "../../_components/ui/Card";
 import { CheckboxField } from "../../_components/ui/FormField";
 import { LoadingBlock } from "../../_components/ui/Spinner";
 import { StatusBadge } from "../../_components/ui/StatusBadge";
+
 import { DEFAULT_SEND_AMOUNT_CAD } from "../../_lib/config";
-import { formatCad, formatEtb, maskAccountNumber, recipientDisplayName } from "../../_lib/format";
+import {
+  formatCad,
+  formatEtb,
+  maskAccountNumber,
+  recipientDisplayName,
+} from "../../_lib/format";
 import { useCurrentCustomer } from "../../_lib/session-context";
 import { customerData } from "../../_lib/services/data-service";
-import type { Bank, DeliverySpeed, NewRecipientInput, Recipient, Transaction } from "../../_lib/types";
+import { getSupabaseCurrentFee } from "../../_lib/services/supabase-fee-service";
+import { getSupabaseCurrentRate } from "../../_lib/services/supabase-rate-service";
 
-const STEPS = ["Amount", "Recipient", "Review", "Submitted"];
+import type {
+  Bank,
+  DeliverySpeed,
+  NewRecipientInput,
+  Recipient,
+  Transaction,
+} from "../../_lib/types";
 
-function initialAmount(raw: string | null): string {
-  const n = raw ? Number.parseFloat(raw) : Number.NaN;
-  return Number.isFinite(n) && n > 0 ? String(n) : String(DEFAULT_SEND_AMOUNT_CAD);
+const STEPS = [
+  "Amount",
+  "Recipient",
+  "Review",
+  "Submitted",
+];
+
+function initialAmount(
+  raw: string | null,
+): string {
+  const n = raw
+    ? Number.parseFloat(raw)
+    : Number.NaN;
+
+  return Number.isFinite(n) && n > 0
+    ? String(n)
+    : String(DEFAULT_SEND_AMOUNT_CAD);
 }
 
 function SendMoneyFlow() {
@@ -32,40 +74,237 @@ function SendMoneyFlow() {
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState(0);
-  const [amountText, setAmountText] = useState(() => initialAmount(searchParams.get("amount")));
-  const [speed, setSpeed] = useState<DeliverySpeed>(() =>
-    searchParams.get("speed") === "express" ? "express" : "standard",
+
+  const [amountText, setAmountText] =
+    useState(() =>
+      initialAmount(
+        searchParams.get("amount"),
+      ),
+    );
+
+  const [speed, setSpeed] =
+    useState<DeliverySpeed>(() =>
+      searchParams.get("speed") ===
+      "express"
+        ? "express"
+        : "standard",
+    );
+
+  const [
+    showAmountErrors,
+    setShowAmountErrors,
+  ] = useState(false);
+
+  /*
+   * Business-controlled pricing.
+   */
+  const [
+    businessRate,
+    setBusinessRate,
+  ] = useState<number | null>(null);
+
+  const [
+    businessFee,
+    setBusinessFee,
+  ] = useState<number | null>(null);
+
+  const [
+    pricingLoading,
+    setPricingLoading,
+  ] = useState(true);
+
+  const [
+    pricingError,
+    setPricingError,
+  ] = useState<string | null>(null);
+
+  /*
+   * Customer choice.
+   *
+   * false:
+   * $500 entered
+   * $5 fee added on top
+   * $505 total
+   * $500 converted
+   *
+   * true:
+   * $500 entered
+   * $5 fee included
+   * $500 total
+   * $495 converted
+   */
+  const [
+    feeIncludedInAmount,
+    setFeeIncludedInAmount,
+  ] = useState(false);
+
+  const [
+    recipients,
+    setRecipients,
+  ] = useState<Recipient[] | null>(null);
+
+  const [banks, setBanks] =
+    useState<Bank[]>([]);
+
+  const [
+    loadError,
+    setLoadError,
+  ] = useState<string | null>(null);
+
+  const [
+    recipientId,
+    setRecipientId,
+  ] = useState<string | null>(() =>
+    searchParams.get("recipient"),
   );
-  const [showAmountErrors, setShowAmountErrors] = useState(false);
 
-  const [recipients, setRecipients] = useState<Recipient[] | null>(null);
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [recipientId, setRecipientId] = useState<string | null>(() => searchParams.get("recipient"));
-  const [addingRecipient, setAddingRecipient] = useState(false);
-  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [
+    addingRecipient,
+    setAddingRecipient,
+  ] = useState(false);
 
-  const [confirmed, setConfirmed] = useState(false);
-  const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<Transaction | null>(null);
+  const [
+    recipientError,
+    setRecipientError,
+  ] = useState<string | null>(null);
 
-  const headingRef = useRef<HTMLDivElement>(null);
+  const [
+    confirmed,
+    setConfirmed,
+  ] = useState(false);
 
+  const [
+    confirmError,
+    setConfirmError,
+  ] = useState<string | null>(null);
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    submitError,
+    setSubmitError,
+  ] = useState<string | null>(null);
+
+  const [
+    result,
+    setResult,
+  ] = useState<Transaction | null>(
+    null,
+  );
+
+  const headingRef =
+    useRef<HTMLDivElement>(null);
+
+  /*
+   * Load the current business exchange
+   * rate and transfer fee from Supabase.
+   *
+   * The customer's business is determined
+   * from their authenticated customer
+   * profile and protected by RLS.
+   */
   useEffect(() => {
     let cancelled = false;
-    Promise.all([customerData.listRecipients(customer.id), customerData.listBanks()])
-      .then(([list, bankList]) => {
-        if (cancelled) return;
-        setRecipients(list);
-        setBanks(bankList);
-        setRecipientId((current) => (current && list.some((r) => r.id === current) ? current : null));
-        if (list.length === 0) setAddingRecipient(true);
-      })
+
+    async function loadPricing() {
+      setPricingLoading(true);
+      setPricingError(null);
+
+      try {
+        const [
+          rateResult,
+          feeResult,
+        ] = await Promise.all([
+          getSupabaseCurrentRate(),
+          getSupabaseCurrentFee(),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setBusinessRate(
+          rateResult.rate,
+        );
+
+        setBusinessFee(
+          feeResult.feeCad,
+        );
+      } catch (err: unknown) {
+        if (cancelled) {
+          return;
+        }
+
+        setPricingError(
+          err instanceof Error
+            ? err.message
+            : "Could not load the current rate and transfer fee.",
+        );
+      } finally {
+        if (!cancelled) {
+          setPricingLoading(false);
+        }
+      }
+    }
+
+    loadPricing();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customer.id]);
+
+  /*
+   * Load recipients and banks.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      customerData.listRecipients(
+        customer.id,
+      ),
+      customerData.listBanks(),
+    ])
+      .then(
+        ([list, bankList]) => {
+          if (cancelled) {
+            return;
+          }
+
+          setRecipients(list);
+          setBanks(bankList);
+
+          setRecipientId(
+            (current) =>
+              current &&
+              list.some(
+                (recipient) =>
+                  recipient.id ===
+                  current,
+              )
+                ? current
+                : null,
+          );
+
+          if (list.length === 0) {
+            setAddingRecipient(true);
+          }
+        },
+      )
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Could not load recipients.");
+        if (!cancelled) {
+          setLoadError(
+            err instanceof Error
+              ? err.message
+              : "Could not load recipients.",
+          );
+        }
       });
+
     return () => {
       cancelled = true;
     };
@@ -73,56 +312,152 @@ function SendMoneyFlow() {
 
   function goTo(next: number) {
     setStep(next);
-    headingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    headingRef.current?.scrollIntoView(
+      {
+        behavior: "smooth",
+        block: "start",
+      },
+    );
   }
 
-  const { quote, error: amountError } = quoteFromInput(amountText, speed);
-  const selectedRecipient = recipients?.find((r) => r.id === recipientId) ?? null;
+  /*
+   * Quote uses the real business rate,
+   * real business fee, and customer's
+   * fee choice.
+   */
+  const {
+    quote,
+    error: amountError,
+  } = quoteFromInput(
+    amountText,
+    speed,
+    businessRate ?? 0,
+    businessFee ?? 0,
+    feeIncludedInAmount,
+  );
+
+  const selectedRecipient =
+    recipients?.find(
+      (recipient) =>
+        recipient.id === recipientId,
+    ) ?? null;
 
   function continueFromAmount() {
+    if (pricingLoading) {
+      return;
+    }
+
+    if (
+      pricingError ||
+      businessRate === null ||
+      businessFee === null
+    ) {
+      return;
+    }
+
     if (amountError) {
       setShowAmountErrors(true);
       return;
     }
+
     goTo(1);
   }
 
   function continueFromRecipient() {
     if (!selectedRecipient) {
-      setRecipientError("Choose a recipient or add a new one.");
+      setRecipientError(
+        "Choose a recipient or add a new one.",
+      );
+
       return;
     }
+
     setRecipientError(null);
+
     goTo(2);
   }
 
-  async function handleAddRecipient(input: NewRecipientInput) {
-    const created = await customerData.addRecipient(customer.id, input);
-    setRecipients((prev) => [created, ...(prev ?? [])]);
+  async function handleAddRecipient(
+    input: NewRecipientInput,
+  ) {
+    const created =
+      await customerData.addRecipient(
+        customer.id,
+        input,
+      );
+
+    setRecipients((previous) => [
+      created,
+      ...(previous ?? []),
+    ]);
+
     setRecipientId(created.id);
     setAddingRecipient(false);
     setRecipientError(null);
+
     return created;
   }
 
   async function handleSubmit() {
     if (!confirmed) {
-      setConfirmError("Please confirm the details before submitting.");
+      setConfirmError(
+        "Please confirm the details before submitting.",
+      );
+
       return;
     }
-    if (!selectedRecipient) return;
+
+    if (!selectedRecipient) {
+      return;
+    }
+
+    /*
+     * The demo transaction service now receives
+     * the exact quote information that the
+     * customer reviewed.
+     *
+     * In production, the server must independently
+     * retrieve and validate the current business
+     * rate and fee instead of trusting the browser.
+     */
     setSubmitting(true);
     setSubmitError(null);
+
     try {
-      const txn = await customerData.createTransferRequest(customer.id, {
-        recipientId: selectedRecipient.id,
-        sendAmountCad: quote.sendAmountCad,
-        deliverySpeed: speed,
-      });
+      const txn =
+        await customerData.createTransferRequest(
+          customer.id,
+          {
+            recipientId:
+              selectedRecipient.id,
+
+            sendAmountCad:
+              quote.sendAmountCad,
+
+            deliverySpeed:
+              speed,
+
+            exchangeRate:
+              quote.exchangeRate,
+
+            feeCad:
+              quote.feeCad,
+
+            feeIncludedInAmount:
+              quote.feeIncludedInAmount,
+          },
+        );
+
       setResult(txn);
+
       goTo(3);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "The demo transfer could not be created.");
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "The demo transfer could not be created.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -131,171 +466,540 @@ function SendMoneyFlow() {
   function startOver() {
     setResult(null);
     setConfirmed(false);
-    setAmountText(String(DEFAULT_SEND_AMOUNT_CAD));
+    setConfirmError(null);
+    setSubmitError(null);
+
+    setAmountText(
+      String(
+        DEFAULT_SEND_AMOUNT_CAD,
+      ),
+    );
+
+    setFeeIncludedInAmount(false);
     setShowAmountErrors(false);
+
     goTo(0);
   }
 
   return (
     <>
-      <div ref={headingRef} className="scroll-mt-20">
-        <PageHeader title="Send Money" description="Request a simulated CAD → ETB transfer in four steps." />
-      </div>
-      <div className="mb-6">
-        <StepIndicator steps={STEPS} current={step} />
+      <div
+        ref={headingRef}
+        className="scroll-mt-20"
+      >
+        <PageHeader
+          title="Send Money"
+          description="Request a CAD to ETB transfer in four steps."
+        />
       </div>
 
-      {/* STEP 1 — Amount */}
+      <div className="mb-6">
+        <StepIndicator
+          steps={STEPS}
+          current={step}
+        />
+      </div>
+
+      {/* STEP 1 - Amount */}
       {step === 0 && (
         <Card title="How much are you sending?">
           <div className="mx-auto max-w-xl">
-            <RateCalculator
-              amountText={amountText}
-              onAmountTextChange={(v) => {
-                setAmountText(v);
-                setShowAmountErrors(false);
-              }}
-              deliverySpeed={speed}
-              onDeliverySpeedChange={setSpeed}
-              showErrors={showAmountErrors}
-              footer={
-                <Button size="lg" fullWidth onClick={continueFromAmount}>
-                  Continue to recipient
-                </Button>
-              }
-            />
+            {pricingLoading ? (
+              <LoadingBlock label="Loading current rate and transfer fee..." />
+            ) : pricingError ? (
+              <Alert
+                tone="error"
+                title="Could not load pricing"
+              >
+                {pricingError}
+              </Alert>
+            ) : businessRate ===
+                null ||
+              businessFee === null ? (
+              <Alert tone="error">
+                The current business rate
+                or transfer fee is
+                unavailable.
+              </Alert>
+            ) : (
+              <RateCalculator
+                amountText={
+                  amountText
+                }
+                onAmountTextChange={(
+                  value,
+                ) => {
+                  setAmountText(value);
+
+                  setShowAmountErrors(
+                    false,
+                  );
+                }}
+                deliverySpeed={
+                  speed
+                }
+                onDeliverySpeedChange={
+                  setSpeed
+                }
+                exchangeRate={
+                  businessRate
+                }
+                transferFeeCad={
+                  businessFee
+                }
+                feeIncludedInAmount={
+                  feeIncludedInAmount
+                }
+                onFeeIncludedInAmountChange={(
+                  included,
+                ) => {
+                  setFeeIncludedInAmount(
+                    included,
+                  );
+
+                  setShowAmountErrors(
+                    false,
+                  );
+                }}
+                showErrors={
+                  showAmountErrors
+                }
+                footer={
+                  <Button
+                    size="lg"
+                    fullWidth
+                    onClick={
+                      continueFromAmount
+                    }
+                  >
+                    Continue to
+                    recipient
+                  </Button>
+                }
+              />
+            )}
           </div>
         </Card>
       )}
 
-      {/* STEP 2 — Recipient */}
+      {/* STEP 2 - Recipient */}
       {step === 1 && (
         <Card
           title="Who are you sending to?"
-          description={`Sending ${formatCad(quote.sendAmountCad)} → ${formatEtb(quote.receiveAmountEtb)}`}
+          description={`Sending ${formatCad(
+            quote.sendAmountCad,
+          )} - recipient receives ${formatEtb(
+            quote.receiveAmountEtb,
+          )}`}
         >
-          {loadError && <Alert tone="error" className="mb-4">{loadError}</Alert>}
-          {!recipients && !loadError ? (
-            <LoadingBlock label="Loading recipients…" />
+          {loadError && (
+            <Alert
+              tone="error"
+              className="mb-4"
+            >
+              {loadError}
+            </Alert>
+          )}
+
+          {!recipients &&
+          !loadError ? (
+            <LoadingBlock label="Loading recipients..." />
           ) : addingRecipient ? (
             <div>
-              <h3 className="mb-4 text-base font-semibold text-slate-900">Add new recipient</h3>
+              <h3 className="mb-4 text-base font-semibold text-slate-900">
+                Add new recipient
+              </h3>
+
               <RecipientForm
                 banks={banks}
-                onSubmit={handleAddRecipient}
-                onCancel={recipients && recipients.length > 0 ? () => setAddingRecipient(false) : undefined}
+                onSubmit={
+                  handleAddRecipient
+                }
+                onCancel={
+                  recipients &&
+                  recipients.length >
+                    0
+                    ? () =>
+                        setAddingRecipient(
+                          false,
+                        )
+                    : undefined
+                }
                 submitLabel="Save and select"
               />
             </div>
           ) : (
             <div className="space-y-4">
               <RecipientPicker
-                recipients={recipients ?? []}
+                recipients={
+                  recipients ?? []
+                }
                 banks={banks}
-                selectedId={recipientId}
+                selectedId={
+                  recipientId
+                }
                 onSelect={(id) => {
                   setRecipientId(id);
-                  setRecipientError(null);
+
+                  setRecipientError(
+                    null,
+                  );
                 }}
               />
-              <Button variant="secondary" fullWidth onClick={() => setAddingRecipient(true)}>
+
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() =>
+                  setAddingRecipient(
+                    true,
+                  )
+                }
+              >
                 + Add new recipient
               </Button>
-              {recipientError && <Alert tone="error">{recipientError}</Alert>}
+
+              {recipientError && (
+                <Alert tone="error">
+                  {recipientError}
+                </Alert>
+              )}
             </div>
           )}
+
           {!addingRecipient && (
             <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
-              <Button variant="secondary" onClick={() => goTo(0)}>Back</Button>
-              <Button onClick={continueFromRecipient} disabled={!recipients}>Continue to review</Button>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  goTo(0)
+                }
+              >
+                Back
+              </Button>
+
+              <Button
+                onClick={
+                  continueFromRecipient
+                }
+                disabled={
+                  !recipients
+                }
+              >
+                Continue to review
+              </Button>
             </div>
           )}
         </Card>
       )}
 
-      {/* STEP 3 — Review */}
-      {step === 2 && selectedRecipient && (
-        <Card title="Review your transfer" description="Check everything carefully before you confirm.">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <QuoteSummary quote={quote} title="Amounts" />
-            <div className="rounded-xl border border-slate-200 p-4">
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Recipient</h3>
-              <dl className="divide-y divide-slate-100 text-sm">
-                {[
-                  ["Recipient", recipientDisplayName(selectedRecipient)],
-                  ["Destination bank", bankNameFor(banks, selectedRecipient.bankId)],
-                  ["Account number", maskAccountNumber(selectedRecipient.accountLast4)],
-                  ["Phone", selectedRecipient.phone],
-                  ["Sending reason", selectedRecipient.sendingReason],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2">
-                    <dt className="text-slate-600">{label}</dt>
-                    <dd className="break-words text-right font-medium text-slate-900">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <button
-                type="button"
-                onClick={() => goTo(1)}
-                className="mt-2 min-h-11 text-sm font-semibold text-blue-700 hover:underline"
-              >
-                Change recipient
-              </button>
+      {/* STEP 3 - Review */}
+      {step === 2 &&
+        selectedRecipient && (
+          <Card
+            title="Review your transfer"
+            description="Check everything carefully before you confirm."
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              <QuoteSummary
+                quote={quote}
+                title="Amounts"
+              />
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                  Recipient
+                </h3>
+
+                <dl className="divide-y divide-slate-100 text-sm">
+                  {[
+                    [
+                      "Recipient",
+                      recipientDisplayName(
+                        selectedRecipient,
+                      ),
+                    ],
+                    [
+                      "Destination bank",
+                      bankNameFor(
+                        banks,
+                        selectedRecipient.bankId,
+                      ),
+                    ],
+                    [
+                      "Account number",
+                      maskAccountNumber(
+                        selectedRecipient.accountLast4,
+                      ),
+                    ],
+                    [
+                      "Phone",
+                      selectedRecipient.phone,
+                    ],
+                    [
+                      "Sending reason",
+                      selectedRecipient.sendingReason,
+                    ],
+                  ].map(
+                    ([
+                      label,
+                      value,
+                    ]) => (
+                      <div
+                        key={
+                          label
+                        }
+                        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2"
+                      >
+                        <dt className="text-slate-600">
+                          {
+                            label
+                          }
+                        </dt>
+
+                        <dd className="break-words text-right font-medium text-slate-900">
+                          {
+                            value
+                          }
+                        </dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    goTo(1)
+                  }
+                  className="mt-2 min-h-11 text-sm font-semibold text-blue-700 hover:underline"
+                >
+                  Change recipient
+                </button>
+              </div>
             </div>
-          </div>
 
-          <Alert tone="warning" className="mt-6" title="This is a demo simulation">
-            Submitting creates a synthetic transfer request with status “Pending”. No payment is
-            taken and no money is sent.
-          </Alert>
+            <Alert
+              tone="warning"
+              className="mt-6"
+              title="Demo transaction submission"
+            >
+              The rate and transfer
+              fee shown above come
+              from the business
+              configuration. The
+              final transaction
+              submission is still
+              simulated. No payment
+              is taken and no money
+              is sent.
+            </Alert>
 
-          <div className="mt-4">
-            <CheckboxField
-              label={`I confirm the details above are correct and understand this is a simulated ${formatCad(quote.totalCad)} transfer.`}
-              checked={confirmed}
-              onChange={(e) => {
-                setConfirmed(e.target.checked);
-                setConfirmError(null);
-              }}
-              error={confirmError ?? undefined}
-            />
-          </div>
+            <div className="mt-4">
+              <CheckboxField
+                label={`I confirm the details above are correct and understand this is currently a simulated ${formatCad(
+                  quote.totalCad,
+                )} transfer.`}
+                checked={
+                  confirmed
+                }
+                onChange={(e) => {
+                  setConfirmed(
+                    e.target
+                      .checked,
+                  );
 
-          {submitError && <Alert tone="error" className="mt-4">{submitError}</Alert>}
+                  setConfirmError(
+                    null,
+                  );
+                }}
+                error={
+                  confirmError ??
+                  undefined
+                }
+              />
+            </div>
 
-          <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
-            <Button variant="secondary" onClick={() => goTo(1)} disabled={submitting}>Back</Button>
-            <Button size="lg" onClick={handleSubmit} loading={submitting} loadingText="Submitting demo request…">
-              Confirm and submit (demo)
-            </Button>
-          </div>
-        </Card>
-      )}
+            {submitError && (
+              <Alert
+                tone="error"
+                className="mt-4"
+              >
+                {submitError}
+              </Alert>
+            )}
 
-      {/* STEP 4 — Demo submission result */}
+            <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  goTo(1)
+                }
+                disabled={
+                  submitting
+                }
+              >
+                Back
+              </Button>
+
+              <Button
+                size="lg"
+                onClick={
+                  handleSubmit
+                }
+                loading={
+                  submitting
+                }
+                loadingText="Submitting demo request..."
+              >
+                Confirm and submit
+                (demo)
+              </Button>
+            </div>
+          </Card>
+        )}
+
+      {/* STEP 4 - Result */}
       {step === 3 && result && (
         <Card>
           <div className="mx-auto max-w-lg py-4 text-center">
-            <div aria-hidden="true" className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
+            <div
+              aria-hidden="true"
+              className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700"
+            >
               ✓
             </div>
-            <h2 className="mt-4 text-2xl font-bold text-slate-900">Demo transfer request created</h2>
+
+            <h2 className="mt-4 text-2xl font-bold text-slate-900">
+              Demo transfer request
+              created
+            </h2>
+
             <p className="mt-2 text-sm text-slate-600">
-              This is a <strong>simulation</strong>. No money has moved. In the live service you&apos;d
-              receive updates as your transfer is processed.
+              This transaction is
+              still a simulation.
+              No money has moved.
             </p>
+
             <dl className="mt-6 space-y-2 rounded-xl bg-slate-50 p-4 text-left text-sm">
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-slate-600">Reference</dt><dd className="font-mono font-semibold">{result.reference}</dd></div>
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-slate-600">Status</dt><dd><StatusBadge status={result.status} /></dd></div>
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-slate-600">Recipient</dt><dd className="font-medium">{result.recipient.displayName}</dd></div>
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-slate-600">Total</dt><dd className="font-medium tabular-nums">{formatCad(result.totalCad)}</dd></div>
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-slate-600">Recipient gets</dt><dd className="font-medium tabular-nums">{formatEtb(result.receiveAmountEtb)}</dd></div>
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Reference
+                </dt>
+
+                <dd className="font-mono font-semibold">
+                  {
+                    result.reference
+                  }
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Status
+                </dt>
+
+                <dd>
+                  <StatusBadge
+                    status={
+                      result.status
+                    }
+                  />
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Recipient
+                </dt>
+
+                <dd className="font-medium">
+                  {
+                    result
+                      .recipient
+                      .displayName
+                  }
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Send amount
+                </dt>
+
+                <dd className="font-medium tabular-nums">
+                  {formatCad(
+                    result.sendAmountCad,
+                  )}
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Transfer fee
+                </dt>
+
+                <dd className="font-medium tabular-nums">
+                  {formatCad(
+                    result.feeCad,
+                  )}
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Amount converted
+                </dt>
+
+                <dd className="font-medium tabular-nums">
+                  {formatCad(
+                    result.amountConvertedCad,
+                  )}
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Total
+                </dt>
+
+                <dd className="font-medium tabular-nums">
+                  {formatCad(
+                    result.totalCad,
+                  )}
+                </dd>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <dt className="text-slate-600">
+                  Recipient gets
+                </dt>
+
+                <dd className="font-medium tabular-nums">
+                  {formatEtb(
+                    result.receiveAmountEtb,
+                  )}
+                </dd>
+              </div>
             </dl>
+
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <ButtonLink href={`/customer/transactions/${encodeURIComponent(result.id)}`} fullWidth>
+              <ButtonLink
+                href={`/customer/transactions/${encodeURIComponent(
+                  result.id,
+                )}`}
+                fullWidth
+              >
                 View receipt
               </ButtonLink>
-              <Button variant="secondary" fullWidth onClick={startOver}>
+
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={
+                  startOver
+                }
+              >
                 Send another
               </Button>
             </div>
@@ -308,7 +1012,11 @@ function SendMoneyFlow() {
 
 export default function SendMoneyPage() {
   return (
-    <Suspense fallback={<LoadingBlock />}>
+    <Suspense
+      fallback={
+        <LoadingBlock />
+      }
+    >
       <SendMoneyFlow />
     </Suspense>
   );

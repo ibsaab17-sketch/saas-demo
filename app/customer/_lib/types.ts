@@ -1,14 +1,14 @@
 /**
  * Shared domain types for the BusinessFlow Customer Portal.
- *
- * These mirror the shape we expect from the future Supabase/PostgreSQL
- * schema so presentation components do not need to change when the demo
- * services are replaced with real ones.
  */
 
 export type CurrencyCode = "CAD" | "ETB";
 
-export type TransferStatus = "Pending" | "Processing" | "Completed" | "Cancelled";
+export type TransferStatus =
+  | "Pending"
+  | "Processing"
+  | "Completed"
+  | "Cancelled";
 
 export type DeliverySpeed = "standard" | "express";
 
@@ -20,9 +20,9 @@ export interface Customer {
   lastName: string;
   email: string;
   phone: string;
-  createdAt: string; // ISO date
+  createdAt: string;
   notificationPreferences: NotificationPreferences;
-  isDemo: true;
+  isDemo: boolean;
 }
 
 export interface NotificationPreferences {
@@ -35,31 +35,23 @@ export interface NotificationPreferences {
 export interface Bank {
   id: string;
   name: string;
-  /** Short code for display only. Not a real routing/SWIFT code. */
   shortName: string;
 }
 
 export interface Recipient {
   id: string;
-  /** Owning customer. In production this is enforced with Row Level Security. */
   customerId: string;
   type: RecipientType;
-  /** Individual recipients */
   firstName: string;
   middleName?: string;
   lastName: string;
-  /** Business recipients */
   businessName?: string;
   phone: string;
   sendingReason: string;
   bankId: string;
-  /**
-   * SECURITY: the full account number is never stored by the portal.
-   * Only the last four digits are kept, for masked display.
-   */
   accountLast4: string;
   createdAt: string;
-  isDemo: true;
+  isDemo: boolean;
 }
 
 export interface FeeOption {
@@ -70,22 +62,37 @@ export interface FeeOption {
 }
 
 export interface Quote {
+  /** Amount entered by the customer. */
   sendAmountCad: number;
-  exchangeRate: number; // ETB per 1 CAD
+
+  /** Amount actually converted to ETB. */
+  amountConvertedCad: number;
+
+  /** ETB per 1 CAD. */
+  exchangeRate: number;
+
+  /** Business transfer fee. */
   feeCad: number;
+
+  /**
+   * false = fee is added on top.
+   * true = fee is included in the entered amount.
+   */
+  feeIncludedInAmount: boolean;
+
+  /** Final amount paid by the customer. */
   totalCad: number;
+
+  /** Final ETB amount received. */
   receiveAmountEtb: number;
+
   deliverySpeed: DeliverySpeed;
-  /** When this quote was generated (ISO). */
+
   quotedAt: string;
-  /** Demo quotes are never live market rates. */
-  isDemoRate: true;
+
+  isDemoRate: boolean;
 }
 
-/**
- * A snapshot of recipient details captured at submission time, so a
- * receipt stays accurate even if the saved recipient is later edited.
- */
 export interface RecipientSnapshot {
   recipientId: string;
   displayName: string;
@@ -97,22 +104,42 @@ export interface RecipientSnapshot {
 
 export interface Transaction {
   id: string;
-  reference: string; // e.g. DEMO-BF-240001
+  reference: string;
   createdAt: string;
   status: TransferStatus;
   customerId: string;
   customerName: string;
   recipient: RecipientSnapshot;
+
+  /** Amount originally entered by the customer. */
   sendAmountCad: number;
+
+  /** Amount actually converted after fee treatment. */
+  amountConvertedCad: number;
+
+  /** Exchange rate used when the transaction was quoted. */
   exchangeRate: number;
+
+  /** Transfer fee used for this transaction. */
   feeCad: number;
+
+  /**
+   * false = fee was added on top.
+   * true = fee was included in the entered amount.
+   */
+  feeIncludedInAmount: boolean;
+
+  /** Final amount paid by the customer. */
   totalCad: number;
+
+  /** Final amount the recipient receives in ETB. */
   receiveAmountEtb: number;
+
   deliverySpeed: DeliverySpeed;
-  isDemo: true;
+
+  isDemo: boolean;
 }
 
-/** Input used when adding a recipient. Contains the full account number only transiently. */
 export interface NewRecipientInput {
   type: RecipientType;
   firstName: string;
@@ -127,8 +154,24 @@ export interface NewRecipientInput {
 
 export interface TransferRequestInput {
   recipientId: string;
+
+  /** Amount entered by the customer. */
   sendAmountCad: number;
+
   deliverySpeed: DeliverySpeed;
+
+  /** Business exchange rate shown and approved by the customer. */
+  exchangeRate: number;
+
+  /** Business transfer fee shown and approved by the customer. */
+  feeCad: number;
+
+  /**
+   * Customer's fee choice.
+   * false = fee added on top.
+   * true = fee included in entered amount.
+   */
+  feeIncludedInAmount: boolean;
 }
 
 export interface RegistrationInput {
@@ -136,7 +179,6 @@ export interface RegistrationInput {
   lastName: string;
   email: string;
   phone: string;
-  /** Used for demo validation only. Never stored. */
   password: string;
 }
 

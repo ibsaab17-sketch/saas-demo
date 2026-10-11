@@ -32,6 +32,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
+
     Promise.all([
       customerData.listTransactions(customer.id),
       customerData.listRecipients(customer.id),
@@ -39,11 +40,25 @@ export default function DashboardPage() {
       rateService.getCurrentRate(),
     ])
       .then(([transactions, recipients, banks, rate]) => {
-        if (!cancelled) setData({ transactions, recipients, banks, rate: rate.rate });
+        if (!cancelled) {
+          setData({
+            transactions,
+            recipients,
+            banks,
+            rate: rate.rate,
+          });
+        }
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load your dashboard.");
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Could not load your dashboard.",
+          );
+        }
       });
+
     return () => {
       cancelled = true;
     };
@@ -51,7 +66,9 @@ export default function DashboardPage() {
 
   const counts = TRANSFER_STATUSES.map((status) => ({
     status,
-    count: data?.transactions.filter((t) => t.status === status).length ?? 0,
+    count:
+      data?.transactions.filter((transaction) => transaction.status === status)
+        .length ?? 0,
   }));
 
   return (
@@ -64,9 +81,18 @@ export default function DashboardPage() {
       {/* Quick send + rate */}
       <div className="grid gap-4 md:grid-cols-5">
         <div className="min-w-0 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 p-5 text-white shadow-sm sm:p-6 md:col-span-3">
-          <p className="text-sm font-medium text-blue-100">Quick send</p>
-          <p className="mt-1 text-xl font-bold sm:text-2xl">Ready to send money?</p>
-          <p className="mt-1 text-sm text-blue-100">Get a quote, pick a recipient and review before you confirm.</p>
+          <p className="text-sm font-medium text-blue-100">
+            Quick send
+          </p>
+
+          <p className="mt-1 text-xl font-bold sm:text-2xl">
+            Ready to send money?
+          </p>
+
+          <p className="mt-1 text-sm text-blue-100">
+            Get a quote, pick a recipient and review before you confirm.
+          </p>
+
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
             <Link
               href="/customer/send"
@@ -74,6 +100,7 @@ export default function DashboardPage() {
             >
               Send money
             </Link>
+
             <Link
               href="/customer/recipients"
               className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/40 px-5 font-semibold text-white hover:bg-white/10"
@@ -82,28 +109,55 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 md:col-span-2">
-          <p className="text-sm font-medium text-slate-500">Current rate</p>
+          <p className="text-sm font-medium text-slate-500">
+            Current rate
+          </p>
+
           <p className="mt-1 break-words text-2xl font-bold tabular-nums text-slate-900">
             {data ? formatRate(data.rate) : "—"}
           </p>
-          <p className="mt-2 inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-            Demo rate — not live
+
+          <p className="mt-2 inline-flex rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+            Business rate
           </p>
         </div>
       </div>
 
-      {error && <Alert tone="error" className="mt-6">{error}</Alert>}
+      {error && (
+        <Alert tone="error" className="mt-6">
+          {error}
+        </Alert>
+      )}
 
       {/* Status summary */}
-      <section aria-labelledby="status-heading" className="mt-6">
-        <h2 id="status-heading" className="sr-only">Transfer status summary</h2>
+      <section
+        aria-labelledby="status-heading"
+        className="mt-6"
+      >
+        <h2
+          id="status-heading"
+          className="sr-only"
+        >
+          Transfer status summary
+        </h2>
+
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {counts.map(({ status, count }) => (
-            <li key={status} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <li
+              key={status}
+              className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
               <StatusBadge status={status} />
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{data ? count : "—"}</p>
-              <p className="text-xs text-slate-500">{count === 1 ? "transfer" : "transfers"}</p>
+
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {data ? count : "—"}
+              </p>
+
+              <p className="text-xs text-slate-500">
+                {count === 1 ? "transfer" : "transfers"}
+              </p>
             </li>
           ))}
         </ul>
@@ -113,7 +167,14 @@ export default function DashboardPage() {
         <Card
           className="xl:col-span-2"
           title="Recent transactions"
-          action={<Link href="/customer/transactions" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 hover:underline">View all</Link>}
+          action={
+            <Link
+              href="/customer/transactions"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 hover:underline"
+            >
+              View all
+            </Link>
+          }
         >
           {!data && !error ? (
             <LoadingBlock label="Loading transactions…" />
@@ -121,16 +182,30 @@ export default function DashboardPage() {
             <EmptyState
               title="No transfers yet"
               description="Your simulated transfers will appear here."
-              action={<ButtonLink href="/customer/send">Send your first transfer</ButtonLink>}
+              action={
+                <ButtonLink href="/customer/send">
+                  Send your first transfer
+                </ButtonLink>
+              }
             />
           ) : data ? (
-            <TransactionList transactions={data.transactions.slice(0, 3)} variant="compact" />
+            <TransactionList
+              transactions={data.transactions.slice(0, 3)}
+              variant="compact"
+            />
           ) : null}
         </Card>
 
         <Card
           title="Saved recipients"
-          action={<Link href="/customer/recipients" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 hover:underline">Manage</Link>}
+          action={
+            <Link
+              href="/customer/recipients"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700 hover:underline"
+            >
+              Manage
+            </Link>
+          }
         >
           {!data && !error ? (
             <LoadingBlock label="Loading recipients…" />
@@ -138,17 +213,35 @@ export default function DashboardPage() {
             <EmptyState
               title="No recipients yet"
               description="Add someone you send money to."
-              action={<ButtonLink href="/customer/recipients?add=1" variant="secondary">Add recipient</ButtonLink>}
+              action={
+                <ButtonLink
+                  href="/customer/recipients?add=1"
+                  variant="secondary"
+                >
+                  Add recipient
+                </ButtonLink>
+              }
             />
           ) : data ? (
             <ul className="divide-y divide-slate-100">
               {data.recipients.slice(0, 4).map((recipient) => (
-                <li key={recipient.id} className="flex items-center justify-between gap-3 py-3">
-                  <RecipientSummary recipient={recipient} banks={data.banks} />
+                <li
+                  key={recipient.id}
+                  className="flex items-center justify-between gap-3 py-3"
+                >
+                  <RecipientSummary
+                    recipient={recipient}
+                    banks={data.banks}
+                  />
+
                   <Link
-                    href={`/customer/send?recipient=${encodeURIComponent(recipient.id)}`}
+                    href={`/customer/send?recipient=${encodeURIComponent(
+                      recipient.id,
+                    )}`}
                     className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-                    aria-label={`Send money to ${recipientDisplayName(recipient)}`}
+                    aria-label={`Send money to ${recipientDisplayName(
+                      recipient,
+                    )}`}
                   >
                     Send
                   </Link>
