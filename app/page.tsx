@@ -15,36 +15,55 @@ const menu = [
   "Billing",
 ];
 
-const transactions = [
-  {
-    customer: "Alex Morgan",
-    amount: "$1,000.00",
-    rate: "1.3675",
-    total: "$1,367.50",
-    status: "Completed",
-  },
-  {
-    customer: "Sarah Ahmed",
-    amount: "$2,500.00",
-    rate: "1.3675",
-    total: "$3,418.75",
-    status: "Completed",
-  },
-  {
-    customer: "Michael Chen",
-    amount: "$750.00",
-    rate: "1.3675",
-    total: "$1,025.63",
-    status: "Completed",
-  },
-  {
-    customer: "Daniel Johnson",
-    amount: "$1,250.00",
-    rate: "1.3675",
-    total: "$1,709.38",
-    status: "Completed",
-  },
-];
+interface AdminTransactionApiItem {
+  id: string;
+  reference: string;
+  createdAt: string;
+  customer: { id: string; name: string; email: string };
+  recipient: {
+    id: string;
+    name: string;
+    bankId: string;
+    accountLast4: string;
+    phone: string;
+    sendingReason: string;
+  };
+  sendAmountCad: number;
+  feeCad: number;
+  feeTreatment: string;
+  amountConvertedCad: number;
+  totalCad: number;
+  exchangeRate: number;
+  recipientAmountEtb: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  transactionStatus: string;
+  paymentProofAvailable: boolean;
+  paymentProofUploadedAt: string | null;
+  paymentVerifiedAt: string | null;
+  processingStartedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+}
+
+interface AdminTransactionsResponse {
+  business?: { id: string; name: string };
+  transactions?: AdminTransactionApiItem[];
+  error?: string;
+}
+
+interface AdminTransactionView {
+  id: string;
+  reference: string;
+  customer: string;
+  amount: string;
+  rate: string;
+  total: string;
+  status: string;
+  paymentStatus: string;
+  proofAvailable: boolean;
+}
+
 
 const customers = [
   {
@@ -94,6 +113,10 @@ function Card({
 export default function Home() {
   const [active, setActive] = useState("Dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [transactions, setTransactions] = useState<AdminTransactionView[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Business");
@@ -200,6 +223,63 @@ export default function Home() {
     }
 
     loadAdminData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTransactions() {
+      try {
+        setTransactionsLoading(true);
+        setTransactionsError(null);
+
+        const response = await fetch("/api/admin/transactions", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const result = (await response.json()) as AdminTransactionsResponse;
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to load transactions.");
+        }
+
+        if (cancelled) return;
+
+        const realTransactions = (result.transactions ?? []).map((transaction) => ({
+          id: transaction.id,
+          reference: transaction.reference,
+          customer: transaction.customer.name || transaction.customer.email || "Unknown customer",
+          amount: `$${transaction.sendAmountCad.toFixed(2)} CAD`,
+          rate: transaction.exchangeRate.toFixed(2),
+          total: `${transaction.recipientAmountEtb.toLocaleString()} ETB`,
+          status: transaction.transactionStatus.replace(/_/g, " "),
+          paymentStatus: transaction.paymentStatus.replace(/_/g, " "),
+          proofAvailable: transaction.paymentProofAvailable,
+        }));
+
+        setTransactions(realTransactions);
+
+        if (result.business?.name) {
+          setBusinessName(result.business.name);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setTransactionsError(
+          error instanceof Error ? error.message : "Unable to load transactions.",
+        );
+      } finally {
+        if (!cancelled) {
+          setTransactionsLoading(false);
+        }
+      }
+    }
+
+    loadTransactions();
 
     return () => {
       cancelled = true;
@@ -528,15 +608,29 @@ export default function Home() {
                     </button>
                   </div>
 
+                  {transactionsLoading && (
+                    <div className="p-5 text-sm text-slate-500">Loading transactions...</div>
+                  )}
+
+                  {transactionsError && (
+                    <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                      {transactionsError}
+                    </div>
+                  )}
+
+                  {!transactionsLoading && !transactionsError && transactions.length === 0 && (
+                    <div className="p-5 text-sm text-slate-500">No transactions yet.</div>
+                  )}
+
                   <div className="divide-y divide-slate-100 md:hidden">
                     {transactions.map((transaction) => (
-                      <div key={transaction.customer} className="p-4">
+                      <div key={transaction.id} className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <p className="font-semibold">
                             {transaction.customer}
                           </p>
 
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
                             {transaction.status}
                           </span>
                         </div>
@@ -582,7 +676,7 @@ export default function Home() {
                       <tbody>
                         {transactions.map((transaction) => (
                           <tr
-                            key={transaction.customer}
+                            key={transaction.id}
                             className="border-t border-slate-100"
                           >
                             <td className="px-5 py-4 font-medium">
@@ -598,7 +692,7 @@ export default function Home() {
                               {transaction.total}
                             </td>
                             <td className="px-5 py-4">
-                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
                                 {transaction.status}
                               </span>
                             </td>
@@ -699,21 +793,35 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <button className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white sm:w-auto sm:py-2">
-                    + New Transaction
-                  </button>
+                  <div className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">
+                    Live customer transactions
+                  </div>
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  {transactionsLoading && (
+                    <div className="p-5 text-sm text-slate-500">Loading transactions...</div>
+                  )}
+
+                  {transactionsError && (
+                    <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                      {transactionsError}
+                    </div>
+                  )}
+
+                  {!transactionsLoading && !transactionsError && transactions.length === 0 && (
+                    <div className="p-5 text-sm text-slate-500">No transactions yet.</div>
+                  )}
+
                   <div className="divide-y divide-slate-100 md:hidden">
                     {transactions.map((transaction) => (
-                      <div key={transaction.customer} className="p-4">
+                      <div key={transaction.id} className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <p className="font-semibold">
                             {transaction.customer}
                           </p>
 
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
                             {transaction.status}
                           </span>
                         </div>
@@ -758,7 +866,7 @@ export default function Home() {
                     <tbody>
                       {transactions.map((transaction) => (
                         <tr
-                          key={transaction.customer}
+                          key={transaction.id}
                           className="border-t border-slate-100"
                         >
                           <td className="p-4 font-medium">
@@ -767,7 +875,7 @@ export default function Home() {
                           <td className="p-4">{transaction.amount}</td>
                           <td className="p-4">{transaction.rate}</td>
                           <td className="p-4">{transaction.total}</td>
-                          <td className="p-4 text-emerald-700">
+                          <td className="p-4 capitalize text-emerald-700">
                             {transaction.status}
                           </td>
                         </tr>

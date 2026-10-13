@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import {
+  ChangeEvent,
   Suspense,
   useEffect,
   useRef,
@@ -41,6 +42,7 @@ import { useCurrentCustomer } from "../../_lib/session-context";
 import { customerData } from "../../_lib/services/data-service";
 import { getSupabaseCurrentFee } from "../../_lib/services/supabase-fee-service";
 import { getSupabaseCurrentRate } from "../../_lib/services/supabase-rate-service";
+import { createSupabaseTransaction } from "../../_lib/services/supabase-transaction-service";
 
 import type {
   Bank,
@@ -53,9 +55,21 @@ import type {
 const STEPS = [
   "Amount",
   "Recipient",
+  "Payment Proof",
   "Review",
   "Submitted",
 ];
+
+const MAX_PROOF_SIZE =
+  10 * 1024 * 1024;
+
+const ALLOWED_PROOF_TYPES =
+  new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+  ]);
 
 function initialAmount(
   raw: string | null,
@@ -119,18 +133,18 @@ function SendMoneyFlow() {
   ] = useState<string | null>(null);
 
   /*
-   * Customer choice.
+   * Customer fee choice.
    *
    * false:
    * $500 entered
-   * $5 fee added on top
-   * $505 total
+   * $5 fee added
+   * $505 total paid
    * $500 converted
    *
    * true:
    * $500 entered
-   * $5 fee included
-   * $500 total
+   * $5 fee deducted
+   * $500 total paid
    * $495 converted
    */
   const [
@@ -168,6 +182,20 @@ function SendMoneyFlow() {
     setRecipientError,
   ] = useState<string | null>(null);
 
+  /*
+   * Payment proof selected before
+   * the transaction is submitted.
+   */
+  const [
+    paymentProof,
+    setPaymentProof,
+  ] = useState<File | null>(null);
+
+  const [
+    proofError,
+    setProofError,
+  ] = useState<string | null>(null);
+
   const [
     confirmed,
     setConfirmed,
@@ -195,16 +223,21 @@ function SendMoneyFlow() {
     null,
   );
 
+  /*
+   * If transaction creation succeeds
+   * but proof upload fails, we must not
+   * tell the customer everything succeeded.
+   */
+  const [
+    proofUploadFailed,
+    setProofUploadFailed,
+  ] = useState(false);
+
   const headingRef =
     useRef<HTMLDivElement>(null);
 
   /*
-   * Load the current business exchange
-   * rate and transfer fee from Supabase.
-   *
-   * The customer's business is determined
-   * from their authenticated customer
-   * profile and protected by RLS.
+   * Load current business pricing.
    */
   useEffect(() => {
     let cancelled = false;
@@ -321,11 +354,6 @@ function SendMoneyFlow() {
     );
   }
 
-  /*
-   * Quote uses the real business rate,
-   * real business fee, and customer's
-   * fee choice.
-   */
   const {
     quote,
     error: amountError,
@@ -399,6 +427,93 @@ function SendMoneyFlow() {
     return created;
   }
 
+  function handleProofChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    setProofError(null);
+    setSubmitError(null);
+
+    const file =
+      event.target.files?.[0] ??
+      null;
+
+    if (!file) {
+      setPaymentProof(null);
+      return;
+    }
+
+    if (
+      !ALLOWED_PROOF_TYPES.has(
+        file.type,
+      )
+    ) {
+      setPaymentProof(null);
+
+      setProofError(
+        "Please choose a JPG, PNG, WebP, or PDF file.",
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+    if (file.size <= 0) {
+      setPaymentProof(null);
+
+      setProofError(
+        "The selected file is empty.",
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+    if (
+      file.size >
+      MAX_PROOF_SIZE
+    ) {
+      setPaymentProof(null);
+
+      setProofError(
+        "Payment proof must be 10 MB or smaller.",
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+    setPaymentProof(file);
+  }
+
+  function continueFromProof() {
+    if (!paymentProof) {
+      setProofError(
+        "Please upload your Interac e-Transfer proof before continuing.",
+      );
+
+      return;
+    }
+
+    setProofError(null);
+    setConfirmed(false);
+    setConfirmError(null);
+
+    goTo(3);
+  }
+
+  /*
+   * Final submission:
+   *
+   * 1. Create the real transaction.
+   * 2. Receive the new transaction ID.
+   * 3. Upload the selected proof to that
+   *    exact transaction.
+   * 4. Only show full success when both
+   *    operations succeed.
+   */
   async function handleSubmit() {
     if (!confirmed) {
       setConfirmError(
@@ -409,54 +524,108 @@ function SendMoneyFlow() {
     }
 
     if (!selectedRecipient) {
+      setSubmitError(
+        "The selected recipient is no longer available.",
+      );
+
       return;
     }
 
-    /*
-     * The demo transaction service now receives
-     * the exact quote information that the
-     * customer reviewed.
-     *
-     * In production, the server must independently
-     * retrieve and validate the current business
-     * rate and fee instead of trusting the browser.
-     */
+    if (!paymentProof) {
+      setProofError(
+        "Payment proof is required.",
+      );
+
+      goTo(2);
+
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
+    setProofUploadFailed(false);
 
     try {
       const txn =
-        await customerData.createTransferRequest(
-          customer.id,
+        await createSupabaseTransaction({
+          recipientId:
+            selectedRecipient.id,
+
+          sendAmountCad:
+            quote.sendAmountCad,
+
+          feeIncludedInAmount:
+            quote.feeIncludedInAmount,
+        });
+
+      /*
+       * Store the transaction immediately.
+       *
+       * If proof upload fails, we still
+       * know which transaction was created
+       * and can send the customer to its
+       * detail page to retry.
+       */
+      setResult(txn);
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "file",
+        paymentProof,
+      );
+
+      const proofResponse =
+        await fetch(
+          `/api/customer/transactions/${encodeURIComponent(
+            txn.id,
+          )}/payment-proof`,
           {
-            recipientId:
-              selectedRecipient.id,
-
-            sendAmountCad:
-              quote.sendAmountCad,
-
-            deliverySpeed:
-              speed,
-
-            exchangeRate:
-              quote.exchangeRate,
-
-            feeCad:
-              quote.feeCad,
-
-            feeIncludedInAmount:
-              quote.feeIncludedInAmount,
+            method: "POST",
+            body: formData,
           },
         );
 
-      setResult(txn);
+      let proofResult: {
+        success?: boolean;
+        error?: string;
+      } = {};
 
-      goTo(3);
+      try {
+        proofResult =
+          (await proofResponse.json()) as {
+            success?: boolean;
+            error?: string;
+          };
+      } catch {
+        /*
+         * The HTTP status below still
+         * determines success or failure.
+         */
+      }
+
+      if (!proofResponse.ok) {
+        setProofUploadFailed(true);
+
+        setSubmitError(
+          proofResult.error ??
+            "The transfer request was created, but the payment proof could not be uploaded. Open the transaction and upload the proof again.",
+        );
+
+        goTo(4);
+
+        return;
+      }
+
+      setProofUploadFailed(false);
+
+      goTo(4);
     } catch (err) {
       setSubmitError(
         err instanceof Error
           ? err.message
-          : "The demo transfer could not be created.",
+          : "The transfer request could not be created.",
       );
     } finally {
       setSubmitting(false);
@@ -468,6 +637,9 @@ function SendMoneyFlow() {
     setConfirmed(false);
     setConfirmError(null);
     setSubmitError(null);
+    setPaymentProof(null);
+    setProofError(null);
+    setProofUploadFailed(false);
 
     setAmountText(
       String(
@@ -489,7 +661,7 @@ function SendMoneyFlow() {
       >
         <PageHeader
           title="Send Money"
-          description="Request a CAD to ETB transfer in four steps."
+          description="Create a CAD to ETB transfer request and submit your Interac e-Transfer payment proof."
         />
       </div>
 
@@ -686,19 +858,197 @@ function SendMoneyFlow() {
                   !recipients
                 }
               >
-                Continue to review
+                Continue to payment
               </Button>
             </div>
           )}
         </Card>
       )}
 
-      {/* STEP 3 - Review */}
+      {/* STEP 3 - Payment Proof */}
       {step === 2 &&
         selectedRecipient && (
           <Card
+            title="Send payment and upload proof"
+            description="Send your Interac e-Transfer outside BusinessFlow, then upload proof of the payment."
+          >
+            <div className="mx-auto max-w-2xl">
+              <Alert
+                tone="info"
+                title="Interac e-Transfer payment"
+              >
+                Send{" "}
+                <strong>
+                  {formatCad(
+                    quote.totalCad,
+                  )}
+                </strong>{" "}
+                using the Interac
+                e-Transfer payment
+                instructions provided
+                by the business. Do not
+                send money through
+                BusinessFlow itself.
+              </Alert>
+
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Payment summary
+                </h3>
+
+                <dl className="mt-3 divide-y divide-slate-200 text-sm">
+                  <div className="flex justify-between gap-4 py-2">
+                    <dt className="text-slate-600">
+                      Send amount
+                    </dt>
+
+                    <dd className="font-semibold tabular-nums text-slate-900">
+                      {formatCad(
+                        quote.sendAmountCad,
+                      )}
+                    </dd>
+                  </div>
+
+                  <div className="flex justify-between gap-4 py-2">
+                    <dt className="text-slate-600">
+                      Transfer fee
+                    </dt>
+
+                    <dd className="font-semibold tabular-nums text-slate-900">
+                      {formatCad(
+                        quote.feeCad,
+                      )}
+                    </dd>
+                  </div>
+
+                  <div className="flex justify-between gap-4 py-2">
+                    <dt className="font-semibold text-slate-900">
+                      Total to pay
+                    </dt>
+
+                    <dd className="font-bold tabular-nums text-slate-900">
+                      {formatCad(
+                        quote.totalCad,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="mt-6">
+                <label
+                  htmlFor="payment-proof"
+                  className="block text-sm font-semibold text-slate-900"
+                >
+                  Upload e-Transfer
+                  proof
+                </label>
+
+                <p className="mt-1 text-sm text-slate-600">
+                  Upload the payment
+                  confirmation
+                  screenshot, photo, or
+                  PDF.
+                </p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  JPG, PNG, WebP or PDF.
+                  Maximum 10 MB.
+                </p>
+
+                <input
+                  id="payment-proof"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={
+                    handleProofChange
+                  }
+                  className="mt-3 block w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+                />
+
+                {paymentProof && (
+                  <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="text-sm font-semibold text-emerald-900">
+                      Payment proof
+                      selected
+                    </div>
+
+                    <div className="mt-1 break-all text-sm text-emerald-800">
+                      {
+                        paymentProof.name
+                      }
+                    </div>
+
+                    <div className="mt-1 text-xs text-emerald-700">
+                      {(
+                        paymentProof.size /
+                        1024 /
+                        1024
+                      ).toFixed(2)}{" "}
+                      MB
+                    </div>
+                  </div>
+                )}
+
+                {proofError && (
+                  <Alert
+                    tone="error"
+                    className="mt-4"
+                  >
+                    {proofError}
+                  </Alert>
+                )}
+              </div>
+
+              <Alert
+                tone="warning"
+                className="mt-5"
+                title="Proof is not payment verification"
+              >
+                Uploading a screenshot
+                or receipt does not
+                automatically confirm
+                that the business
+                received the money. The
+                business will verify the
+                actual Interac
+                e-Transfer separately
+                before processing the
+                transfer.
+              </Alert>
+
+              <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    goTo(1)
+                  }
+                >
+                  Back
+                </Button>
+
+                <Button
+                  onClick={
+                    continueFromProof
+                  }
+                  disabled={
+                    !paymentProof
+                  }
+                >
+                  Continue to review
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
+      {/* STEP 4 - Review */}
+      {step === 3 &&
+        selectedRecipient &&
+        paymentProof && (
+          <Card
             title="Review your transfer"
-            description="Check everything carefully before you confirm."
+            description="Check the transfer and payment proof before submitting."
           >
             <div className="grid gap-6 lg:grid-cols-2">
               <QuoteSummary
@@ -746,21 +1096,15 @@ function SendMoneyFlow() {
                       value,
                     ]) => (
                       <div
-                        key={
-                          label
-                        }
+                        key={label}
                         className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2"
                       >
                         <dt className="text-slate-600">
-                          {
-                            label
-                          }
+                          {label}
                         </dt>
 
                         <dd className="break-words text-right font-medium text-slate-900">
-                          {
-                            value
-                          }
+                          {value}
                         </dd>
                       </div>
                     ),
@@ -779,34 +1123,68 @@ function SendMoneyFlow() {
               </div>
             </div>
 
+            <div className="mt-6 rounded-xl border border-slate-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Interac e-Transfer
+                    proof
+                  </h3>
+
+                  <p className="mt-1 break-all text-sm text-slate-700">
+                    {paymentProof.name}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    {(
+                      paymentProof.size /
+                      1024 /
+                      1024
+                    ).toFixed(2)}{" "}
+                    MB
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    goTo(2)
+                  }
+                  className="min-h-11 text-sm font-semibold text-blue-700 hover:underline"
+                >
+                  Change proof
+                </button>
+              </div>
+            </div>
+
             <Alert
               tone="warning"
               className="mt-6"
-              title="Demo transaction submission"
+              title="Payment awaiting verification"
             >
-              The rate and transfer
-              fee shown above come
-              from the business
-              configuration. The
-              final transaction
-              submission is still
-              simulated. No payment
-              is taken and no money
-              is sent.
+              BusinessFlow does not move
+              your money. Your transfer
+              request and payment proof
+              will be submitted to the
+              business. The business
+              must separately verify
+              that the Interac
+              e-Transfer was actually
+              received before processing
+              the transfer.
             </Alert>
 
             <div className="mt-4">
               <CheckboxField
-                label={`I confirm the details above are correct and understand this is currently a simulated ${formatCad(
+                label={`I confirm the transfer details are correct, I sent ${formatCad(
                   quote.totalCad,
-                )} transfer.`}
+                )} by Interac e-Transfer outside BusinessFlow, and the payment proof I selected relates to this transfer.`}
                 checked={
                   confirmed
                 }
                 onChange={(e) => {
                   setConfirmed(
-                    e.target
-                      .checked,
+                    e.target.checked,
                   );
 
                   setConfirmError(
@@ -833,7 +1211,7 @@ function SendMoneyFlow() {
               <Button
                 variant="secondary"
                 onClick={() =>
-                  goTo(1)
+                  goTo(2)
                 }
                 disabled={
                   submitting
@@ -850,36 +1228,72 @@ function SendMoneyFlow() {
                 loading={
                   submitting
                 }
-                loadingText="Submitting demo request..."
+                loadingText="Submitting transfer..."
+                disabled={
+                  !confirmed ||
+                  submitting
+                }
               >
                 Confirm and submit
-                (demo)
               </Button>
             </div>
           </Card>
         )}
 
-      {/* STEP 4 - Result */}
-      {step === 3 && result && (
+      {/* STEP 5 - Result */}
+      {step === 4 && result && (
         <Card>
           <div className="mx-auto max-w-lg py-4 text-center">
             <div
               aria-hidden="true"
-              className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700"
+              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
+                proofUploadFailed
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-emerald-100 text-emerald-700"
+              }`}
             >
-              ✓
+              {proofUploadFailed
+                ? "!"
+                : "✓"}
             </div>
 
             <h2 className="mt-4 text-2xl font-bold text-slate-900">
-              Demo transfer request
-              created
+              {proofUploadFailed
+                ? "Transfer created — proof needs attention"
+                : "Transfer submitted"}
             </h2>
 
-            <p className="mt-2 text-sm text-slate-600">
-              This transaction is
-              still a simulation.
-              No money has moved.
-            </p>
+            {proofUploadFailed ? (
+              <p className="mt-2 text-sm text-slate-600">
+                Your transfer request
+                was created, but the
+                payment proof could not
+                be uploaded. Do not
+                create another transfer.
+                Open this transaction and
+                upload the proof again.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-600">
+                Your transfer request
+                and payment proof were
+                submitted. The payment
+                is now awaiting
+                verification by the
+                business before the
+                transfer is processed.
+              </p>
+            )}
+
+            {proofUploadFailed &&
+              submitError && (
+                <Alert
+                  tone="error"
+                  className="mt-5 text-left"
+                >
+                  {submitError}
+                </Alert>
+              )}
 
             <dl className="mt-6 space-y-2 rounded-xl bg-slate-50 p-4 text-left text-sm">
               <div className="flex flex-wrap justify-between gap-2">
@@ -888,9 +1302,7 @@ function SendMoneyFlow() {
                 </dt>
 
                 <dd className="font-mono font-semibold">
-                  {
-                    result.reference
-                  }
+                  {result.reference}
                 </dd>
               </div>
 
@@ -915,8 +1327,7 @@ function SendMoneyFlow() {
 
                 <dd className="font-medium">
                   {
-                    result
-                      .recipient
+                    result.recipient
                       .displayName
                   }
                 </dd>
@@ -960,7 +1371,7 @@ function SendMoneyFlow() {
 
               <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-slate-600">
-                  Total
+                  Total paid
                 </dt>
 
                 <dd className="font-medium tabular-nums">
@@ -983,6 +1394,22 @@ function SendMoneyFlow() {
               </div>
             </dl>
 
+            {!proofUploadFailed && (
+              <Alert
+                tone="success"
+                className="mt-6 text-left"
+                title="Payment proof submitted"
+              >
+                Your proof was uploaded
+                successfully. This does
+                not mean payment has
+                already been verified.
+                The business will verify
+                receipt of the Interac
+                e-Transfer separately.
+              </Alert>
+            )}
+
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <ButtonLink
                 href={`/customer/transactions/${encodeURIComponent(
@@ -990,7 +1417,7 @@ function SendMoneyFlow() {
                 )}`}
                 fullWidth
               >
-                View receipt
+                View transaction
               </ButtonLink>
 
               <Button

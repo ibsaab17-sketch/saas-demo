@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+
 import { PageHeader } from "../../_components/PortalShell";
 import { RecipientSummary } from "../../_components/RecipientPicker";
 import { TransactionList } from "../../_components/TransactionList";
@@ -11,12 +12,22 @@ import { Card } from "../../_components/ui/Card";
 import { EmptyState } from "../../_components/ui/EmptyState";
 import { LoadingBlock } from "../../_components/ui/Spinner";
 import { StatusBadge } from "../../_components/ui/StatusBadge";
-import { formatRate, recipientDisplayName } from "../../_lib/format";
+
+import {
+  formatRate,
+  recipientDisplayName,
+} from "../../_lib/format";
+
 import { TRANSFER_STATUSES } from "../../_lib/reference-data";
 import { useCurrentCustomer } from "../../_lib/session-context";
 import { customerData } from "../../_lib/services/data-service";
 import { rateService } from "../../_lib/services/rate-service";
-import type { Bank, Recipient, Transaction } from "../../_lib/types";
+
+import type {
+  Bank,
+  Recipient,
+  Transaction,
+} from "../../_lib/types";
 
 interface DashboardData {
   transactions: Transaction[];
@@ -25,31 +36,87 @@ interface DashboardData {
   rate: number;
 }
 
+interface TransactionListResponse {
+  transactions?: Transaction[];
+  error?: string;
+}
+
 export default function DashboardPage() {
   const customer = useCurrentCustomer();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+
+  const [data, setData] =
+    useState<DashboardData | null>(null);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      customerData.listTransactions(customer.id),
-      customerData.listRecipients(customer.id),
-      customerData.listBanks(),
-      rateService.getCurrentRate(),
-    ])
-      .then(([transactions, recipients, banks, rate]) => {
+    async function loadDashboard() {
+      try {
+        setError(null);
+
+        /*
+         * Transactions come from the real authenticated
+         * customer transaction API.
+         */
+        const transactionResponse =
+          await fetch(
+            "/api/customer/transactions",
+            {
+              method: "GET",
+              cache: "no-store",
+            },
+          );
+
+        let transactionResult:
+          TransactionListResponse;
+
+        try {
+          transactionResult =
+            (await transactionResponse.json()) as TransactionListResponse;
+        } catch {
+          throw new Error(
+            "The server returned an invalid transaction response.",
+          );
+        }
+
+        if (!transactionResponse.ok) {
+          throw new Error(
+            transactionResult.error ??
+              "Could not load transactions.",
+          );
+        }
+
+        /*
+         * Recipients are already backed by Supabase.
+         * Banks and the current business rate use the
+         * existing services.
+         */
+        const [
+          recipients,
+          banks,
+          rate,
+        ] = await Promise.all([
+          customerData.listRecipients(
+            customer.id,
+          ),
+          customerData.listBanks(),
+          rateService.getCurrentRate(),
+        ]);
+
         if (!cancelled) {
           setData({
-            transactions,
+            transactions:
+              transactionResult.transactions ??
+              [],
             recipients,
             banks,
             rate: rate.rate,
           });
         }
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(
             err instanceof Error
@@ -57,25 +124,34 @@ export default function DashboardPage() {
               : "Could not load your dashboard.",
           );
         }
-      });
+      }
+    }
+
+    void loadDashboard();
 
     return () => {
       cancelled = true;
     };
   }, [customer.id]);
 
-  const counts = TRANSFER_STATUSES.map((status) => ({
-    status,
-    count:
-      data?.transactions.filter((transaction) => transaction.status === status)
-        .length ?? 0,
-  }));
+  const counts =
+    TRANSFER_STATUSES.map(
+      (status) => ({
+        status,
+        count:
+          data?.transactions.filter(
+            (transaction) =>
+              transaction.status ===
+              status,
+          ).length ?? 0,
+      }),
+    );
 
   return (
     <>
       <PageHeader
         title={`Welcome, ${customer.firstName}`}
-        description="Send money to Ethiopia and keep track of every transfer."
+        description="Manage your transfer requests and track their progress."
       />
 
       {/* Quick send + rate */}
@@ -86,11 +162,13 @@ export default function DashboardPage() {
           </p>
 
           <p className="mt-1 text-xl font-bold sm:text-2xl">
-            Ready to send money?
+            Ready to start a transfer?
           </p>
 
           <p className="mt-1 text-sm text-blue-100">
-            Get a quote, pick a recipient and review before you confirm.
+            Get a quote, choose a recipient,
+            provide payment proof, and submit
+            your transfer request.
           </p>
 
           <div className="mt-5 flex flex-col gap-3 min-[420px]:flex-row">
@@ -98,7 +176,7 @@ export default function DashboardPage() {
               href="/customer/send"
               className="inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-5 font-semibold text-blue-700 shadow-sm hover:bg-blue-50"
             >
-              Send money
+              Start transfer
             </Link>
 
             <Link
@@ -116,7 +194,9 @@ export default function DashboardPage() {
           </p>
 
           <p className="mt-1 break-words text-2xl font-bold tabular-nums text-slate-900">
-            {data ? formatRate(data.rate) : "—"}
+            {data
+              ? formatRate(data.rate)
+              : "—"}
           </p>
 
           <p className="mt-2 inline-flex rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">
@@ -126,7 +206,10 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <Alert tone="error" className="mt-6">
+        <Alert
+          tone="error"
+          className="mt-6"
+        >
           {error}
         </Alert>
       )}
@@ -144,22 +227,30 @@ export default function DashboardPage() {
         </h2>
 
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {counts.map(({ status, count }) => (
-            <li
-              key={status}
-              className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <StatusBadge status={status} />
+          {counts.map(
+            ({ status, count }) => (
+              <li
+                key={status}
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <StatusBadge
+                  status={status}
+                />
 
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {data ? count : "—"}
-              </p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                  {data
+                    ? count
+                    : "—"}
+                </p>
 
-              <p className="text-xs text-slate-500">
-                {count === 1 ? "transfer" : "transfers"}
-              </p>
-            </li>
-          ))}
+                <p className="text-xs text-slate-500">
+                  {count === 1
+                    ? "transfer"
+                    : "transfers"}
+                </p>
+              </li>
+            ),
+          )}
         </ul>
       </section>
 
@@ -178,19 +269,24 @@ export default function DashboardPage() {
         >
           {!data && !error ? (
             <LoadingBlock label="Loading transactions…" />
-          ) : data && data.transactions.length === 0 ? (
+          ) : data &&
+            data.transactions.length ===
+              0 ? (
             <EmptyState
               title="No transfers yet"
-              description="Your simulated transfers will appear here."
+              description="Your transfer requests will appear here."
               action={
                 <ButtonLink href="/customer/send">
-                  Send your first transfer
+                  Start your first transfer
                 </ButtonLink>
               }
             />
           ) : data ? (
             <TransactionList
-              transactions={data.transactions.slice(0, 3)}
+              transactions={data.transactions.slice(
+                0,
+                3,
+              )}
               variant="compact"
             />
           ) : null}
@@ -209,10 +305,12 @@ export default function DashboardPage() {
         >
           {!data && !error ? (
             <LoadingBlock label="Loading recipients…" />
-          ) : data && data.recipients.length === 0 ? (
+          ) : data &&
+            data.recipients.length ===
+              0 ? (
             <EmptyState
               title="No recipients yet"
-              description="Add someone you send money to."
+              description="Add a recipient to start a transfer request."
               action={
                 <ButtonLink
                   href="/customer/recipients?add=1"
@@ -224,29 +322,35 @@ export default function DashboardPage() {
             />
           ) : data ? (
             <ul className="divide-y divide-slate-100">
-              {data.recipients.slice(0, 4).map((recipient) => (
-                <li
-                  key={recipient.id}
-                  className="flex items-center justify-between gap-3 py-3"
-                >
-                  <RecipientSummary
-                    recipient={recipient}
-                    banks={data.banks}
-                  />
-
-                  <Link
-                    href={`/customer/send?recipient=${encodeURIComponent(
-                      recipient.id,
-                    )}`}
-                    className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-                    aria-label={`Send money to ${recipientDisplayName(
-                      recipient,
-                    )}`}
+              {data.recipients
+                .slice(0, 4)
+                .map((recipient) => (
+                  <li
+                    key={recipient.id}
+                    className="flex items-center justify-between gap-3 py-3"
                   >
-                    Send
-                  </Link>
-                </li>
-              ))}
+                    <RecipientSummary
+                      recipient={
+                        recipient
+                      }
+                      banks={
+                        data.banks
+                      }
+                    />
+
+                    <Link
+                      href={`/customer/send?recipient=${encodeURIComponent(
+                        recipient.id,
+                      )}`}
+                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                      aria-label={`Start transfer to ${recipientDisplayName(
+                        recipient,
+                      )}`}
+                    >
+                      Send
+                    </Link>
+                  </li>
+                ))}
             </ul>
           ) : null}
         </Card>

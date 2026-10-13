@@ -68,7 +68,7 @@ function mapRecipient(
     sendingReason:
       recipient.sending_reason ?? "",
     createdAt: recipient.created_at,
-    isDemo: false,
+    
   };
 }
 

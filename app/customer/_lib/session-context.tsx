@@ -9,43 +9,76 @@ import {
   type ReactNode,
 } from "react";
 
-import { authService } from "./services/auth-service";
 import {
   getSupabaseSession,
   signInWithSupabase,
   signUpWithSupabase,
   signOutFromSupabase,
 } from "./services/supabase-auth-service";
-import { getSupabaseCustomerProfile } from "./services/supabase-customer-service";
-import type { Customer, RegistrationInput } from "./types";
 
-type SessionStatus = "loading" | "signedOut" | "signedIn";
+import { getSupabaseCustomerProfile } from "./services/supabase-customer-service";
+
+import type {
+  Customer,
+  RegistrationInput,
+} from "./types";
+
+type SessionStatus =
+  | "loading"
+  | "signedOut"
+  | "signedIn";
 
 interface SessionContextValue {
   status: SessionStatus;
   customer: Customer | null;
-  signIn(email: string, password: string): Promise<void>;
-  signInWithDemoAccount(): Promise<void>;
-  signUp(input: RegistrationInput): Promise<void>;
+
+  signIn(
+    email: string,
+    password: string,
+  ): Promise<void>;
+
+  signUp(
+    input: RegistrationInput,
+  ): Promise<void>;
+
   signOut(): Promise<void>;
-  resetDemo(): Promise<void>;
-  setCustomer(customer: Customer): void;
+
+  setCustomer(
+    customer: Customer,
+  ): void;
 }
 
-const SessionContext = createContext<SessionContextValue | null>(null);
+const SessionContext =
+  createContext<SessionContextValue | null>(
+    null,
+  );
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<SessionStatus>("loading");
-  const [customer, setCustomerState] = useState<Customer | null>(null);
+export function SessionProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [status, setStatus] =
+    useState<SessionStatus>("loading");
+
+  const [
+    customer,
+    setCustomerState,
+  ] = useState<Customer | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     async function restoreSession() {
       try {
-        const session = await getSupabaseSession();
+        const session =
+          await getSupabaseSession();
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         if (!session) {
           setCustomerState(null);
@@ -53,14 +86,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const profile = await getSupabaseCustomerProfile();
+        const profile =
+          await getSupabaseCustomerProfile();
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         setCustomerState(profile);
-        setStatus(profile ? "signedIn" : "signedOut");
+
+        setStatus(
+          profile
+            ? "signedIn"
+            : "signedOut",
+        );
       } catch {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
+
         setCustomerState(null);
         setStatus("signedOut");
       }
@@ -73,105 +117,111 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value = useMemo<SessionContextValue>(
-    () => ({
-      status,
-      customer,
+  const value =
+    useMemo<SessionContextValue>(
+      () => ({
+        status,
+        customer,
 
-      async signIn(email, password) {
-        await signInWithSupabase(email, password);
-
-        const profile = await getSupabaseCustomerProfile();
-
-        if (!profile) {
-          await signOutFromSupabase();
-          throw new Error(
-            "Your login is valid, but no active customer profile is linked to this account.",
+        async signIn(
+          email,
+          password,
+        ) {
+          await signInWithSupabase(
+            email,
+            password,
           );
-        }
 
-        setCustomerState(profile);
-        setStatus("signedIn");
-      },
+          const profile =
+            await getSupabaseCustomerProfile();
 
-      async signInWithDemoAccount() {
-        const session = await authService.signInWithDemoAccount();
+          if (!profile) {
+            await signOutFromSupabase();
 
-        const { customerData } = await import("./services/data-service");
-        const profile = await customerData.getProfile(session.customerId);
+            throw new Error(
+              "Your login is valid, but no active customer profile is linked to this account.",
+            );
+          }
 
-        setCustomerState(profile);
-        setStatus(profile ? "signedIn" : "signedOut");
-      },
+          setCustomerState(profile);
+          setStatus("signedIn");
+        },
 
-      async signUp(input) {
-        await signUpWithSupabase(
-          input.firstName,
-          input.lastName,
-          input.email,
-          input.phone,
-          input.password,
-        );
+        async signUp(input) {
+          await signUpWithSupabase(
+            input.firstName,
+            input.lastName,
+            input.email,
+            input.phone,
+            input.password,
+          );
 
-        const session = await getSupabaseSession();
+          const session =
+            await getSupabaseSession();
 
-        // Email confirmation may be required by Supabase.
-        // In that case there is no active session yet.
-        if (!session) {
+          /*
+           * Email confirmation may be
+           * required by Supabase.
+           */
+          if (!session) {
+            setCustomerState(null);
+            setStatus("signedOut");
+            return;
+          }
+
+          const profile =
+            await getSupabaseCustomerProfile();
+
+          setCustomerState(profile);
+
+          setStatus(
+            profile
+              ? "signedIn"
+              : "signedOut",
+          );
+        },
+
+        async signOut() {
+          await signOutFromSupabase();
+
           setCustomerState(null);
           setStatus("signedOut");
-          return;
-        }
+        },
 
-        const profile = await getSupabaseCustomerProfile();
-
-        setCustomerState(profile);
-        setStatus(profile ? "signedIn" : "signedOut");
-      },
-
-      async signOut() {
-        if (customer?.isDemo) {
-          await authService.signOut();
-        } else {
-          await signOutFromSupabase();
-        }
-
-        setCustomerState(null);
-        setStatus("signedOut");
-      },
-
-      async resetDemo() {
-        await authService.resetDemo();
-        setCustomerState(null);
-        setStatus("signedOut");
-      },
-
-      setCustomer(next) {
-        setCustomerState(next);
-      },
-    }),
-    [status, customer],
-  );
+        setCustomer(next) {
+          setCustomerState(next);
+        },
+      }),
+      [status, customer],
+    );
 
   return (
-    <SessionContext.Provider value={value}>
+    <SessionContext.Provider
+      value={value}
+    >
       {children}
     </SessionContext.Provider>
   );
 }
 
-export function useSession(): SessionContextValue {
-  const ctx = useContext(SessionContext);
+export function useSession():
+  SessionContextValue {
+  const ctx =
+    useContext(SessionContext);
 
   if (!ctx) {
-    throw new Error("useSession must be used inside <SessionProvider>.");
+    throw new Error(
+      "useSession must be used inside <SessionProvider>.",
+    );
   }
 
   return ctx;
 }
 
-export function useCurrentCustomer(): Customer {
-  const { customer } = useSession();
+export function useCurrentCustomer():
+  Customer {
+  const { customer } =
+    useSession();
 
   if (!customer) {
     throw new Error(

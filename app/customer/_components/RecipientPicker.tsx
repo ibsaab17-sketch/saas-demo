@@ -8,14 +8,13 @@ import type {
   Bank,
   Recipient,
 } from "../_lib/types";
-import { DemoTag } from "./ui/StatusBadge";
 
 export function bankNameFor(
   banks: Bank[],
   bankId: string,
 ): string {
   return (
-    banks.find((b) => b.id === bankId)?.name ??
+    banks.find((bank) => bank.id === bankId)?.name ??
     "Unknown bank"
   );
 }
@@ -39,12 +38,14 @@ export function RecipientSummary({
             Business
           </span>
         )}
-
-        {recipient.isDemo && <DemoTag />}
       </span>
 
       <span className="mt-0.5 block text-sm text-slate-600">
-        {bankNameFor(banks, recipient.bankId)} ·{" "}
+        {bankNameFor(
+          banks,
+          recipient.bankId,
+        )}{" "}
+        ·{" "}
         {maskAccountNumber(
           recipient.accountLast4,
         )}

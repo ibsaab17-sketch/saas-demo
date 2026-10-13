@@ -22,7 +22,6 @@ export interface Customer {
   phone: string;
   createdAt: string;
   notificationPreferences: NotificationPreferences;
-  isDemo: boolean;
 }
 
 export interface NotificationPreferences {
@@ -51,7 +50,6 @@ export interface Recipient {
   bankId: string;
   accountLast4: string;
   createdAt: string;
-  isDemo: boolean;
 }
 
 export interface FeeOption {
@@ -89,8 +87,6 @@ export interface Quote {
   deliverySpeed: DeliverySpeed;
 
   quotedAt: string;
-
-  isDemoRate: boolean;
 }
 
 export interface RecipientSnapshot {
@@ -136,8 +132,6 @@ export interface Transaction {
   receiveAmountEtb: number;
 
   deliverySpeed: DeliverySpeed;
-
-  isDemo: boolean;
 }
 
 export interface NewRecipientInput {

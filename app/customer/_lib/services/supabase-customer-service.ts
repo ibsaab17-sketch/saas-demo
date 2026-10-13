@@ -26,7 +26,9 @@ export async function getSupabaseCustomerProfile(): Promise<Customer | null> {
 
   const { data, error } = await supabase
     .from("customers")
-    .select("id, first_name, last_name, email, phone, created_at, status")
+    .select(
+      "id, first_name, last_name, email, phone, created_at, status",
+    )
     .eq("user_id", user.id)
     .eq("status", "active")
     .maybeSingle();
@@ -46,7 +48,7 @@ export async function getSupabaseCustomerProfile(): Promise<Customer | null> {
     email: data.email,
     phone: data.phone ?? "",
     createdAt: data.created_at,
-    notificationPreferences: defaultNotificationPreferences,
-    isDemo: false,
+    notificationPreferences:
+      defaultNotificationPreferences,
   };
 }

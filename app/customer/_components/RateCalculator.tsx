@@ -1,17 +1,21 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
+import { TRANSFER_LIMITS_CAD } from "../_lib/config";
 import {
-  DEMO_EXCHANGE_RATE_ETB_PER_CAD,
-  TRANSFER_LIMITS_CAD,
-} from "../_lib/config";
-import { formatCad, formatEtb, formatRate } from "../_lib/format";
+  formatCad,
+  formatEtb,
+  formatRate,
+} from "../_lib/format";
 import {
   calculateQuote,
   parseAmountInput,
   validateSendAmount,
 } from "../_lib/quote";
-import type { DeliverySpeed, Quote } from "../_lib/types";
+import type {
+  DeliverySpeed,
+  Quote,
+} from "../_lib/types";
 import { QuoteSummary } from "./QuoteSummary";
 
 export interface RateCalculatorProps {
@@ -23,15 +27,15 @@ export interface RateCalculatorProps {
 
   /**
    * Business-controlled exchange rate.
-   * Falls back to the demo rate when not supplied.
+   * Must be supplied by the parent.
    */
-  exchangeRate?: number;
+  exchangeRate: number;
 
   /**
    * Business-controlled transfer fee.
-   * Falls back to $0 when not supplied.
+   * Must be supplied by the parent.
    */
-  transferFeeCad?: number;
+  transferFeeCad: number;
 
   /**
    * Customer choice:
@@ -40,7 +44,9 @@ export interface RateCalculatorProps {
    */
   feeIncludedInAmount?: boolean;
 
-  onFeeIncludedInAmountChange?(included: boolean): void;
+  onFeeIncludedInAmountChange?(
+    included: boolean,
+  ): void;
 
   /** Show validation messages after the user tries to continue. */
   showErrors?: boolean;
@@ -51,12 +57,15 @@ export interface RateCalculatorProps {
 
 /**
  * Derives the quote and validation state for a raw amount string.
+ *
+ * Pricing must be supplied explicitly. There is no fallback
+ * exchange rate or transfer fee.
  */
 export function quoteFromInput(
   amountText: string,
   deliverySpeed: DeliverySpeed,
-  exchangeRate: number = DEMO_EXCHANGE_RATE_ETB_PER_CAD,
-  transferFeeCad: number = 0,
+  exchangeRate: number,
+  transferFeeCad: number,
   feeIncludedInAmount: boolean = false,
 ) {
   const amount = parseAmountInput(amountText);
@@ -85,16 +94,16 @@ export function quoteFromInput(
 /**
  * CAD to ETB calculator.
  *
- * The parent owns the state so this component can be used by both
- * the public landing page and the authenticated Send Money page.
+ * The parent owns the state and must provide the
+ * business-controlled exchange rate and transfer fee.
  */
 export function RateCalculator({
   amountText,
   onAmountTextChange,
   deliverySpeed,
   onDeliverySpeedChange,
-  exchangeRate = DEMO_EXCHANGE_RATE_ETB_PER_CAD,
-  transferFeeCad = 0,
+  exchangeRate,
+  transferFeeCad,
   feeIncludedInAmount = false,
   onFeeIncludedInAmountChange,
   showErrors = false,
@@ -113,7 +122,9 @@ export function RateCalculator({
 
   const visibleError =
     showErrors ||
-    (amountText !== "" && error && !error.startsWith("Enter"))
+    (amountText !== "" &&
+      error &&
+      !error.startsWith("Enter"))
       ? error
       : null;
 
@@ -151,10 +162,17 @@ export function RateCalculator({
             value={amountText}
             onChange={(e) =>
               onAmountTextChange(
-                e.target.value.replace(/[^0-9.,]/g, ""),
+                e.target.value.replace(
+                  /[^0-9.,]/g,
+                  "",
+                ),
               )
             }
-            aria-invalid={visibleError ? true : undefined}
+            aria-invalid={
+              visibleError
+                ? true
+                : undefined
+            }
             aria-describedby={`${inputId}-help`}
             placeholder="0.00"
             className="min-w-0 flex-1 bg-transparent px-2 py-3 text-2xl font-semibold tabular-nums text-slate-900 focus:outline-none"
@@ -168,7 +186,9 @@ export function RateCalculator({
         <p
           id={`${inputId}-help`}
           className={`mt-1.5 text-sm ${
-            visibleError ? "text-red-700" : "text-slate-500"
+            visibleError
+              ? "text-red-700"
+              : "text-slate-500"
           }`}
         >
           {visibleError ??
@@ -181,7 +201,9 @@ export function RateCalculator({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <span className="font-medium">Exchange rate</span>
+        <span className="font-medium">
+          Exchange rate
+        </span>
 
         <span className="font-semibold tabular-nums">
           {formatRate(quote.exchangeRate)}
@@ -203,16 +225,21 @@ export function RateCalculator({
           <label className="mt-4 flex cursor-pointer items-start gap-3 border-t border-slate-200 pt-4">
             <input
               type="checkbox"
-              checked={feeIncludedInAmount}
+              checked={
+                feeIncludedInAmount
+              }
               onChange={(e) =>
-                onFeeIncludedInAmountChange(e.target.checked)
+                onFeeIncludedInAmountChange(
+                  e.target.checked,
+                )
               }
               className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 accent-blue-600"
             />
 
             <span className="min-w-0">
               <span className="block text-sm font-medium text-slate-800">
-                Include transfer fee in the amount
+                Include transfer fee in
+                the amount
               </span>
 
               <span className="mt-0.5 block text-xs text-slate-500">
@@ -238,7 +265,9 @@ export function RateCalculator({
           className="mt-0.5 break-words text-2xl font-bold tabular-nums text-emerald-950"
           aria-live="polite"
         >
-          {formatEtb(quote.receiveAmountEtb)}
+          {formatEtb(
+            quote.receiveAmountEtb,
+          )}
         </p>
       </div>
 

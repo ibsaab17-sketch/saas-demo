@@ -1,5 +1,9 @@
 import { calculateQuote } from "../quote";
-import type { DeliverySpeed, FeeOption, Quote } from "../types";
+import type {
+  DeliverySpeed,
+  FeeOption,
+  Quote,
+} from "../types";
 import { getSupabaseCurrentFee } from "./supabase-fee-service";
 import { getSupabaseCurrentRate } from "./supabase-rate-service";
 
@@ -7,7 +11,6 @@ export interface RateService {
   getCurrentRate(): Promise<{
     rate: number;
     asOf: string;
-    isDemoRate: boolean;
   }>;
 
   getFeeOptions(): Promise<FeeOption[]>;
@@ -20,27 +23,31 @@ export interface RateService {
 
 export const rateService: RateService = {
   /**
-   * Get the current exchange rate configured by the customer's business.
+   * Get the current exchange rate configured
+   * by the customer's business.
    */
   async getCurrentRate() {
-    const currentRate = await getSupabaseCurrentRate();
+    const currentRate =
+      await getSupabaseCurrentRate();
 
     return {
       rate: currentRate.rate,
       asOf: currentRate.asOf,
-      isDemoRate: false,
     };
   },
 
   /**
-   * Get the current transfer fee configured by the customer's business.
+   * Get the current transfer fee configured
+   * by the customer's business.
    *
-   * We temporarily keep the existing FeeOption structure so the rest
-   * of the customer portal continues working while we transition away
-   * from the old demo delivery-speed fee system.
+   * We temporarily keep the existing FeeOption
+   * structure so the rest of the customer portal
+   * continues working while we transition away
+   * from the old delivery-speed fee system.
    */
   async getFeeOptions() {
-    const currentFee = await getSupabaseCurrentFee();
+    const currentFee =
+      await getSupabaseCurrentFee();
 
     const feeOptions: FeeOption[] = [
       {
@@ -61,14 +68,19 @@ export const rateService: RateService = {
   },
 
   /**
-   * Build a quote using both the current business exchange rate
-   * and the current business transfer fee from Supabase.
+   * Build a quote using both the current
+   * business exchange rate and transfer fee
+   * from Supabase.
    */
-  async getQuote(sendAmountCad, deliverySpeed) {
-    const [currentRate, currentFee] = await Promise.all([
-      getSupabaseCurrentRate(),
-      getSupabaseCurrentFee(),
-    ]);
+  async getQuote(
+    sendAmountCad,
+    deliverySpeed,
+  ) {
+    const [currentRate, currentFee] =
+      await Promise.all([
+        getSupabaseCurrentRate(),
+        getSupabaseCurrentFee(),
+      ]);
 
     return calculateQuote(
       sendAmountCad,
