@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { getAdminBusiness } from "./admin-supabase-service";
@@ -62,35 +62,10 @@ interface AdminTransactionView {
   status: string;
   paymentStatus: string;
   proofAvailable: boolean;
+  createdAt: string;
+  sendAmountCad: number;
 }
 
-
-const customers = [
-  {
-    name: "Alex Morgan",
-    email: "alex@example.com",
-    transactions: 12,
-    status: "Active",
-  },
-  {
-    name: "Sarah Ahmed",
-    email: "sarah@example.com",
-    transactions: 8,
-    status: "Active",
-  },
-  {
-    name: "Michael Chen",
-    email: "michael@example.com",
-    transactions: 6,
-    status: "Active",
-  },
-  {
-    name: "Daniel Johnson",
-    email: "daniel@example.com",
-    transactions: 4,
-    status: "Active",
-  },
-];
 
 function Card({
   title,
@@ -260,6 +235,8 @@ export default function Home() {
           status: transaction.transactionStatus.replace(/_/g, " "),
           paymentStatus: transaction.paymentStatus.replace(/_/g, " "),
           proofAvailable: transaction.paymentProofAvailable,
+          createdAt: transaction.createdAt,
+          sendAmountCad: transaction.sendAmountCad,
         }));
 
         setTransactions(realTransactions);
@@ -428,6 +405,22 @@ export default function Home() {
     ? new Date(feeUpdatedAt).toLocaleString()
     : "No transfer fee has been set yet";
 
+  const today = new Date();
+
+  const todaysTransactions = transactions.filter((transaction) => {
+    const createdAt = new Date(transaction.createdAt);
+    return (
+      createdAt.getFullYear() === today.getFullYear() &&
+      createdAt.getMonth() === today.getMonth() &&
+      createdAt.getDate() === today.getDate()
+    );
+  });
+
+  const todaysVolumeCad = todaysTransactions.reduce(
+    (total, transaction) => total + transaction.sendAmountCad,
+    0
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex min-h-screen">
@@ -485,7 +478,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex h-11 w-11 items-center justify-center rounded-lg text-2xl text-slate-300 hover:bg-slate-800 hover:text-white"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
@@ -523,7 +516,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(true)}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-xl hover:bg-slate-50 md:hidden"
                 >
-                  ☰
+                  â˜°
                 </button>
 
                 <div className="min-w-0">
@@ -560,14 +553,14 @@ export default function Home() {
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   <Card
                     title="Today's Transactions"
-                    value="24"
-                    note="+12% from yesterday"
+                    value={todaysTransactions.length.toString()}
+                    note="Transactions created today"
                   />
 
                   <Card
                     title="Today's Volume"
-                    value="$18,450"
-                    note="+8.4% from yesterday"
+                    value={`$${todaysVolumeCad.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD`}
+                    note="Transfer amount submitted today"
                   />
 
                   <Card
@@ -575,7 +568,7 @@ export default function Home() {
                     value={
                       currentRate !== null
                         ? `1 CAD = ${currentRate.toFixed(2)} ETB`
-                        : "—"
+                        : "â€”"
                     }
                     note={
                       rateUpdatedAt
@@ -585,9 +578,9 @@ export default function Home() {
                   />
 
                   <Card
-                    title="Active Customers"
-                    value="142"
-                    note="+6 this month"
+                    title="Customers"
+                    value="—"
+                    note="Customer statistics not connected yet"
                   />
                 </div>
 
@@ -707,82 +700,25 @@ export default function Home() {
 
             {active === "Customers" && (
               <section>
-                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">Customers</h2>
-                    <p className="text-slate-500">
-                      Manage your business customers.
-                    </p>
-                  </div>
-
-                  <button className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white sm:w-auto sm:py-2">
-                    + Add Customer
-                  </button>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Customers</h2>
+                  <p className="mt-1 text-slate-500">
+                    Manage your business customers.
+                  </p>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="divide-y divide-slate-100 md:hidden">
-                    {customers.map((customer) => (
-                      <div key={customer.email} className="p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold">{customer.name}</p>
-                            <p className="mt-1 break-all text-sm text-slate-500">
-                              {customer.email}
-                            </p>
-                          </div>
+                <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Customer management
+                  </h3>
 
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
-                            {customer.status}
-                          </span>
-                        </div>
-
-                        <div className="mt-4">
-                          <p className="text-xs text-slate-500">
-                            Transactions
-                          </p>
-                          <p className="mt-1 font-medium">
-                            {customer.transactions}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <table className="hidden w-full text-left text-sm md:table">
-                    <thead className="bg-slate-50 text-slate-500">
-                      <tr>
-                        <th className="p-4">Customer</th>
-                        <th className="p-4">Email</th>
-                        <th className="p-4">Transactions</th>
-                        <th className="p-4">Status</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {customers.map((customer) => (
-                        <tr
-                          key={customer.email}
-                          className="border-t border-slate-100"
-                        >
-                          <td className="p-4 font-medium">{customer.name}</td>
-                          <td className="p-4 text-slate-500">
-                            {customer.email}
-                          </td>
-                          <td className="p-4">{customer.transactions}</td>
-                          <td className="p-4">
-                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
-                              {customer.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Customer management will be available here when the admin
+                    customer service is connected.
+                  </p>
                 </div>
               </section>
             )}
-
             {active === "Transactions" && (
               <section>
                 <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -919,7 +855,7 @@ export default function Home() {
                         htmlFor="new-rate"
                         className="block text-sm font-medium"
                       >
-                        New CAD → ETB Rate
+                        New CAD â†’ ETB Rate
                       </label>
 
                       <input
@@ -1030,28 +966,18 @@ export default function Home() {
                   Manage employees and access roles.
                 </p>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  {[
-                    ["Jordan Smith", "Owner"],
-                    ["Emily Wilson", "Administrator"],
-                    ["David Brown", "Employee"],
-                  ].map(([name, role]) => (
-                    <div
-                      key={name}
-                      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-                    >
-                      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                        {name[0]}
-                      </div>
+                <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Employee management
+                  </h3>
 
-                      <p className="font-semibold">{name}</p>
-                      <p className="text-sm text-slate-500">{role}</p>
-                    </div>
-                  ))}
+                  <p className="mt-2 text-sm text-slate-500">
+                    Employee management will be available here when the employee
+                    service is connected.
+                  </p>
                 </div>
               </section>
             )}
-
             {active === "Reports" && (
               <section>
                 <h2 className="text-2xl font-bold">Reports</h2>
@@ -1060,34 +986,24 @@ export default function Home() {
                   Business performance and operational reporting.
                 </p>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <Card
-                    title="Monthly Volume"
-                    value="$284,750"
-                    note="Current month"
-                  />
+                <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Business reports
+                  </h3>
 
-                  <Card
-                    title="Transactions"
-                    value="386"
-                    note="Current month"
-                  />
-
-                  <Card
-                    title="New Customers"
-                    value="18"
-                    note="Current month"
-                  />
+                  <p className="mt-2 text-sm text-slate-500">
+                    Reporting will be available here when the reporting service
+                    is connected to your business data.
+                  </p>
                 </div>
               </section>
             )}
-
             {active === "Settings" && (
               <section>
                 <h2 className="text-2xl font-bold">Business Settings</h2>
 
                 <p className="mt-1 text-slate-500">
-                  Manage your business profile.
+                  View your business profile.
                 </p>
 
                 <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1096,26 +1012,18 @@ export default function Home() {
                   </label>
 
                   <input
-                    defaultValue={businessName}
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2"
+                    value={businessName}
+                    readOnly
+                    className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
                   />
 
-                  <label className="mt-5 block text-sm font-medium">
-                    Business Email
-                  </label>
-
-                  <input
-                    defaultValue="demo@example.com"
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2"
-                  />
-
-                  <button className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
-                    Save Changes
-                  </button>
+                  <p className="mt-4 text-sm text-slate-500">
+                    Business profile editing will be available when business
+                    settings management is connected.
+                  </p>
                 </div>
               </section>
             )}
-
             {active === "Billing" && (
               <section>
                 <h2 className="text-2xl font-bold">Billing</h2>
@@ -1129,25 +1037,25 @@ export default function Home() {
                     <div>
                       <p className="text-sm text-slate-500">Current Plan</p>
                       <h3 className="mt-1 text-2xl font-bold">
-                        Professional
+                        Not configured
                       </h3>
                     </div>
 
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700">
-                      Demo
+                      Not connected
                     </span>
                   </div>
 
                   <div className="mt-6 border-t border-slate-100 pt-6">
                     <p className="text-3xl font-bold">
-                      $49
+                      —
                       <span className="text-base font-normal text-slate-500">
-                        /month
+                        
                       </span>
                     </p>
 
                     <button className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
-                      View Plans
+                      Billing setup unavailable
                     </button>
                   </div>
                 </div>
@@ -1159,3 +1067,9 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
+
+
