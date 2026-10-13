@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -74,7 +74,7 @@ function formatEtb(value: number) {
 
 function formatDate(value: string | null) {
   if (!value) {
-    return "—";
+    return "â€”";
   }
 
   return new Date(value).toLocaleString();
@@ -82,7 +82,7 @@ function formatDate(value: string | null) {
 
 function formatStatus(value: string) {
   if (!value) {
-    return "—";
+    return "â€”";
   }
 
   return value
@@ -108,11 +108,11 @@ function formatBankName(bankId: string) {
     "demo-cbe": "Commercial Bank of Ethiopia",
     "demo-awash": "Awash Bank",
     "demo-dashen": "Dashen Bank",
-    "demo-abyssinia": "Bank of Abyssinia",
+    "demo-boa": "Bank of Abyssinia",
     "demo-coop": "Cooperative Bank of Oromia",
   };
 
-  return banks[bankId] ?? bankId ?? "—";
+  return banks[bankId] ?? bankId ?? "â€”";
 }
 
 function transactionStatusClasses(status: string) {
@@ -580,7 +580,7 @@ export default function AdminTransactionDetailPage() {
             onClick={() => router.push("/")}
             className="mb-6 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
           >
-            ← Back to Dashboard
+            â† Back to Dashboard
           </button>
 
           <div className="rounded-xl border border-red-300 bg-red-50 p-6 font-medium text-red-800">
@@ -602,7 +602,7 @@ export default function AdminTransactionDetailPage() {
               onClick={() => router.push("/")}
               className="mb-3 text-sm font-semibold text-blue-700 hover:text-blue-900"
             >
-              ← Back to Transactions
+              â† Back to Transactions
             </button>
 
             <h1 className="text-2xl font-bold text-slate-950">
@@ -646,7 +646,7 @@ export default function AdminTransactionDetailPage() {
                 <Label>Email</Label>
                 <Value>
                   {transaction.customer.email ||
-                    "—"}
+                    "â€”"}
                 </Value>
               </div>
 
@@ -654,7 +654,7 @@ export default function AdminTransactionDetailPage() {
                 <Label>Phone</Label>
                 <Value>
                   {transaction.customer.phone ||
-                    "—"}
+                    "â€”"}
                 </Value>
               </div>
 
@@ -696,8 +696,8 @@ export default function AdminTransactionDetailPage() {
                 <Value>
                   {transaction.recipient
                     .accountLast4
-                    ? `•••• ${transaction.recipient.accountLast4}`
-                    : "—"}
+                    ? `â€¢â€¢â€¢â€¢ ${transaction.recipient.accountLast4}`
+                    : "â€”"}
                 </Value>
               </div>
 
@@ -705,7 +705,7 @@ export default function AdminTransactionDetailPage() {
                 <Label>Phone</Label>
                 <Value>
                   {transaction.recipient.phone ||
-                    "—"}
+                    "â€”"}
                 </Value>
               </div>
 
@@ -713,7 +713,7 @@ export default function AdminTransactionDetailPage() {
                 <Label>Sending Reason</Label>
                 <Value>
                   {transaction.recipient
-                    .sendingReason || "—"}
+                    .sendingReason || "â€”"}
                 </Value>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import {
   PDFDocument,
   StandardFonts,
@@ -30,7 +30,7 @@ function friendlyBankName(bankId: string | null) {
     "demo-cbe": "Commercial Bank of Ethiopia",
     "demo-awash": "Awash Bank",
     "demo-dashen": "Dashen Bank",
-    "demo-abyssinia": "Bank of Abyssinia",
+    "demo-boa": "Bank of Abyssinia",
     "demo-coop": "Cooperative Bank of Oromia",
   };
 
