@@ -19,14 +19,20 @@ export async function getAdminBusiness(): Promise<AdminBusiness> {
   }
 
   if (!user) {
-    throw new Error("You must be signed in as an owner or administrator.");
+    throw new Error(
+      "You must be signed in as an owner or administrator.",
+    );
   }
 
-  const { data: membership, error: membershipError } = await supabase
+  const {
+    data: membership,
+    error: membershipError,
+  } = await supabase
     .from("business_members")
     .select("business_id, role")
     .eq("user_id", user.id)
     .eq("status", "active")
+    .in("role", ["owner", "admin"])
     .maybeSingle();
 
   if (membershipError) {
@@ -34,10 +40,15 @@ export async function getAdminBusiness(): Promise<AdminBusiness> {
   }
 
   if (!membership) {
-    throw new Error("No active business membership was found.");
+    throw new Error(
+      "No active owner or administrator membership was found.",
+    );
   }
 
-  const { data: business, error: businessError } = await supabase
+  const {
+    data: business,
+    error: businessError,
+  } = await supabase
     .from("businesses")
     .select("id, name")
     .eq("id", membership.business_id)
@@ -46,6 +57,12 @@ export async function getAdminBusiness(): Promise<AdminBusiness> {
 
   if (businessError) {
     throw new Error(businessError.message);
+  }
+
+  if (!business) {
+    throw new Error(
+      "Active business was not found.",
+    );
   }
 
   return {
