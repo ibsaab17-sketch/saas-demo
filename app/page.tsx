@@ -263,6 +263,13 @@ export default function Home() {
     };
   }, []);
 
+  const handleSignOut = async () => {
+    const supabase = createClient();
+
+    await supabase.auth.signOut();
+
+    window.location.href = "/admin/login";
+  };
   const selectSection = (item: string) => {
     setActive(item);
     setMobileMenuOpen(false);
@@ -451,6 +458,14 @@ export default function Home() {
           <div className="border-t border-slate-800 p-5">
             <p className="text-sm font-medium">{businessName}</p>
             <p className="text-xs text-slate-400">Business Account</p>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-4 w-full rounded-lg border border-slate-700 px-4 py-2.5 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              Sign Out
+            </button>
           </div>
         </aside>
 
@@ -478,7 +493,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex h-11 w-11 items-center justify-center rounded-lg text-2xl text-slate-300 hover:bg-slate-800 hover:text-white"
                 >
-                  Ãƒâ€”
+                  X
                 </button>
               </div>
 
@@ -501,6 +516,14 @@ export default function Home() {
               <div className="border-t border-slate-800 p-5">
                 <p className="text-sm font-medium">{businessName}</p>
                 <p className="text-xs text-slate-400">Business Account</p>
+
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="mt-4 w-full rounded-lg border border-slate-700 px-4 py-2.5 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                >
+                  Sign Out
+                </button>
               </div>
             </aside>
           </div>
@@ -516,7 +539,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(true)}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-xl hover:bg-slate-50 md:hidden"
                 >
-                  Ã¢ËœÂ°
+                  Menu
                 </button>
 
                 <div className="min-w-0">
@@ -579,7 +602,7 @@ export default function Home() {
 
                   <Card
                     title="Customers"
-                    value="â€”"
+                    value="Not connected"
                     note="Customer statistics not connected yet"
                   />
                 </div>
@@ -855,7 +878,7 @@ export default function Home() {
                         htmlFor="new-rate"
                         className="block text-sm font-medium"
                       >
-                        New CAD Ã¢â€ â€™ ETB Rate
+                        New CAD to ETB Rate
                       </label>
 
                       <input
@@ -1048,7 +1071,7 @@ export default function Home() {
 
                   <div className="mt-6 border-t border-slate-100 pt-6">
                     <p className="text-3xl font-bold">
-                      â€”
+                      Not configured
                       <span className="text-base font-normal text-slate-500">
                         
                       </span>
