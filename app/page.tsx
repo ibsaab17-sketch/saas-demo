@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { getAdminBusiness } from "./admin-supabase-service";
@@ -478,7 +478,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex h-11 w-11 items-center justify-center rounded-lg text-2xl text-slate-300 hover:bg-slate-800 hover:text-white"
                 >
-                  Ã—
+                  Ãƒâ€”
                 </button>
               </div>
 
@@ -516,7 +516,7 @@ export default function Home() {
                   onClick={() => setMobileMenuOpen(true)}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-xl hover:bg-slate-50 md:hidden"
                 >
-                  â˜°
+                  Ã¢ËœÂ°
                 </button>
 
                 <div className="min-w-0">
@@ -568,18 +568,18 @@ export default function Home() {
                     value={
                       currentRate !== null
                         ? `1 CAD = ${currentRate.toFixed(2)} ETB`
-                        : "â€”"
+                        : "Not set"
                     }
                     note={
-                      rateUpdatedAt
+                      currentRate !== null && rateUpdatedAt
                         ? `Updated ${new Date(rateUpdatedAt).toLocaleDateString()}`
-                        : "Loading current rate"
+                        : "Set your exchange rate in Rates"
                     }
                   />
 
                   <Card
                     title="Customers"
-                    value="—"
+                    value="â€”"
                     note="Customer statistics not connected yet"
                   />
                 </div>
@@ -855,7 +855,7 @@ export default function Home() {
                         htmlFor="new-rate"
                         className="block text-sm font-medium"
                       >
-                        New CAD â†’ ETB Rate
+                        New CAD Ã¢â€ â€™ ETB Rate
                       </label>
 
                       <input
@@ -1048,7 +1048,7 @@ export default function Home() {
 
                   <div className="mt-6 border-t border-slate-100 pt-6">
                     <p className="text-3xl font-bold">
-                      —
+                      â€”
                       <span className="text-base font-normal text-slate-500">
                         
                       </span>
