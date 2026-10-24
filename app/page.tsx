@@ -68,6 +68,20 @@ interface AdminCustomersResponse {
   customers?: AdminCustomer[];
   error?: string;
 }
+interface AdminEmployee {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+}
+
+interface AdminEmployeesResponse {
+  business?: { id: string; name: string };
+  employees?: AdminEmployee[];
+  error?: string;
+}
+
 interface AdminTransactionView {
   id: string;
   reference: string;
@@ -112,6 +126,10 @@ export default function Home() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [customersError, setCustomersError] = useState<string | null>(null);
+
+  const [employees, setEmployees] = useState<AdminEmployee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [employeesError, setEmployeesError] = useState<string | null>(null);
 
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Business");
@@ -320,6 +338,49 @@ export default function Home() {
     }
 
     loadCustomers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEmployees() {
+      try {
+        setEmployeesLoading(true);
+        setEmployeesError(null);
+
+        const response = await fetch("/api/admin/employees", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const result = (await response.json()) as AdminEmployeesResponse;
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to load employees.");
+        }
+
+        if (cancelled) return;
+
+        setEmployees(result.employees ?? []);
+
+        if (result.business?.name) {
+          setBusinessName(result.business.name);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setEmployeesError(
+          error instanceof Error ? error.message : "Unable to load employees.",
+        );
+      } finally {
+        if (!cancelled) setEmployeesLoading(false);
+      }
+    }
+
+    loadEmployees();
 
     return () => {
       cancelled = true;
@@ -1123,21 +1184,76 @@ export default function Home() {
 
             {active === "Employees" && (
               <section>
-                <h2 className="text-2xl font-bold">Employees</h2>
+                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold">Employees</h2>
+                    <p className="mt-1 text-slate-500">
+                      View business owners, administrators, and staff access.
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">
+                    {employeesLoading ? "Loading members..." : `${employees.length} member${employees.length === 1 ? "" : "s"}`}
+                  </div>
+                </div>
 
-                <p className="mt-1 text-slate-500">
-                  Manage employees and access roles.
-                </p>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  {employeesLoading && (
+                    <div className="p-5 text-sm text-slate-500">Loading business members...</div>
+                  )}
+                  {employeesError && (
+                    <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{employeesError}</div>
+                  )}
+                  {!employeesLoading && !employeesError && employees.length === 0 && (
+                    <div className="p-5 text-sm text-slate-500">No business members were found.</div>
+                  )}
+                  {!employeesLoading && !employeesError && employees.length > 0 && (
+                    <>
+                      <div className="divide-y divide-slate-100 md:hidden">
+                        {employees.map((employee) => (
+                          <div key={employee.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="break-all font-semibold">{employee.email}</p>
+                                <p className="mt-1 text-sm capitalize text-slate-500">{employee.role}</p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
+                                {employee.status}
+                              </span>
+                            </div>
+                            <div className="mt-4">
+                              <p className="text-xs text-slate-500">Joined</p>
+                              <p className="mt-1 text-sm font-medium">{new Date(employee.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-                <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    Employee management
-                  </h3>
-
-                  <p className="mt-2 text-sm text-slate-500">
-                    Employee management will be available here when the employee
-                    service is connected.
-                  </p>
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-500">
+                            <tr>
+                              <th className="px-5 py-3">Email</th>
+                              <th className="px-5 py-3">Role</th>
+                              <th className="px-5 py-3">Status</th>
+                              <th className="px-5 py-3">Joined</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {employees.map((employee) => (
+                              <tr key={employee.id} className="border-t border-slate-100">
+                                <td className="px-5 py-4 font-medium">{employee.email}</td>
+                                <td className="px-5 py-4 capitalize">{employee.role}</td>
+                                <td className="px-5 py-4">
+                                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">{employee.status}</span>
+                                </td>
+                                <td className="px-5 py-4">{new Date(employee.createdAt).toLocaleDateString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
             )}
@@ -1230,6 +1346,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
