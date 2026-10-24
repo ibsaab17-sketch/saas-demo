@@ -51,7 +51,23 @@ interface AdminTransactionsResponse {
   transactions?: AdminTransactionApiItem[];
   error?: string;
 }
+interface AdminCustomer {
+  id: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  phone: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
+interface AdminCustomersResponse {
+  business?: { id: string; name: string };
+  customers?: AdminCustomer[];
+  error?: string;
+}
 interface AdminTransactionView {
   id: string;
   reference: string;
@@ -92,6 +108,10 @@ export default function Home() {
   const [transactions, setTransactions] = useState<AdminTransactionView[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
+
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [customersError, setCustomersError] = useState<string | null>(null);
 
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Business");
@@ -257,6 +277,49 @@ export default function Home() {
     }
 
     loadTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCustomers() {
+      try {
+        setCustomersLoading(true);
+        setCustomersError(null);
+
+        const response = await fetch("/api/admin/customers", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const result = (await response.json()) as AdminCustomersResponse;
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to load customers.");
+        }
+
+        if (cancelled) return;
+
+        setCustomers(result.customers ?? []);
+
+        if (result.business?.name) {
+          setBusinessName(result.business.name);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setCustomersError(
+          error instanceof Error ? error.message : "Unable to load customers.",
+        );
+      } finally {
+        if (!cancelled) setCustomersLoading(false);
+      }
+    }
+
+    loadCustomers();
 
     return () => {
       cancelled = true;
@@ -602,8 +665,14 @@ export default function Home() {
 
                   <Card
                     title="Customers"
-                    value="Not connected"
-                    note="Customer statistics not connected yet"
+                    value={customersLoading ? "..." : customers.length.toString()}
+                    note={
+                      customersError
+                        ? "Unable to load customer statistics"
+                        : customers.length === 1
+                          ? "1 registered customer"
+                          : `${customers.length} registered customers`
+                    }
                   />
                 </div>
 
@@ -723,22 +792,93 @@ export default function Home() {
 
             {active === "Customers" && (
               <section>
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold">Customers</h2>
-                  <p className="mt-1 text-slate-500">
-                    Manage your business customers.
-                  </p>
+                <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold">Customers</h2>
+                    <p className="mt-1 text-slate-500">
+                      View customers registered with your business.
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-600">
+                    {customersLoading ? "Loading customers..." : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
+                  </div>
                 </div>
 
-                <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    Customer management
-                  </h3>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  {customersLoading && (
+                    <div className="p-5 text-sm text-slate-500">Loading customers...</div>
+                  )}
 
-                  <p className="mt-2 text-sm text-slate-500">
-                    Customer management will be available here when the admin
-                    customer service is connected.
-                  </p>
+                  {customersError && (
+                    <div className="m-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                      {customersError}
+                    </div>
+                  )}
+
+                  {!customersLoading && !customersError && customers.length === 0 && (
+                    <div className="p-5 text-sm text-slate-500">
+                      No customers have registered with this business yet.
+                    </div>
+                  )}
+
+                  {!customersLoading && !customersError && customers.length > 0 && (
+                    <>
+                      <div className="divide-y divide-slate-100 md:hidden">
+                        {customers.map((customer) => (
+                          <div key={customer.id} className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold">{customer.name || customer.email}</p>
+                                <p className="mt-1 break-all text-sm text-slate-500">{customer.email}</p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
+                                {customer.status}
+                              </span>
+                            </div>
+                            <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                              <div>
+                                <p className="text-xs text-slate-500">Phone</p>
+                                <p className="mt-1 font-medium">{customer.phone || "Not provided"}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500">Joined</p>
+                                <p className="mt-1 font-medium">{new Date(customer.createdAt).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-500">
+                            <tr>
+                              <th className="px-5 py-3">Customer</th>
+                              <th className="px-5 py-3">Email</th>
+                              <th className="px-5 py-3">Phone</th>
+                              <th className="px-5 py-3">Status</th>
+                              <th className="px-5 py-3">Joined</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {customers.map((customer) => (
+                              <tr key={customer.id} className="border-t border-slate-100">
+                                <td className="px-5 py-4 font-medium">{customer.name || customer.email}</td>
+                                <td className="px-5 py-4">{customer.email}</td>
+                                <td className="px-5 py-4">{customer.phone || "Not provided"}</td>
+                                <td className="px-5 py-4">
+                                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium capitalize text-emerald-700">
+                                    {customer.status}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4">{new Date(customer.createdAt).toLocaleDateString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
             )}
