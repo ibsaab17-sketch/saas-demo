@@ -148,13 +148,14 @@ export function SessionProvider({
         },
 
         async signUp(input) {
-          await signUpWithSupabase(
-            input.firstName,
-            input.lastName,
-            input.email,
-            input.phone,
-            input.password,
-          );
+         await signUpWithSupabase(
+  input.firstName,
+  input.lastName,
+  input.email,
+  input.phone,
+  input.password,
+  input.businessSlug,
+);
 
           const session =
             await getSupabaseSession();

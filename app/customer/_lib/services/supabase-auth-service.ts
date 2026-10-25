@@ -54,10 +54,18 @@ export async function signUpWithSupabase(
   email: string,
   phone: string,
   password: string,
+  businessSlug: string,
 ): Promise<void> {
   const supabase = createClient();
 
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedBusinessSlug = businessSlug.trim().toLowerCase();
+
+  if (!normalizedBusinessSlug) {
+    throw new Error(
+      "A business is required to create your customer account.",
+    );
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
@@ -68,7 +76,7 @@ export async function signUpWithSupabase(
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         phone: phone.trim() || null,
-        business_slug: "businessflow-demo",
+        business_slug: normalizedBusinessSlug,
       },
     },
   });
@@ -82,13 +90,13 @@ export async function signUpWithSupabase(
   }
 
   // Supabase email confirmation is enabled.
-  // If there is no session yet, the customer must confirm their email first.
+  // If there is no session yet, the customer confirms their email first.
   if (!data.session) {
     return;
   }
 
   const { error: profileError } = await supabase.rpc("register_customer", {
-    p_business_slug: "businessflow-demo",
+    p_business_slug: normalizedBusinessSlug,
     p_first_name: firstName.trim(),
     p_last_name: lastName.trim(),
     p_email: normalizedEmail,

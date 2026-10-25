@@ -174,6 +174,7 @@ export interface RegistrationInput {
   email: string;
   phone: string;
   password: string;
+  businessSlug: string;
 }
 
 export interface ProfileUpdateInput {
