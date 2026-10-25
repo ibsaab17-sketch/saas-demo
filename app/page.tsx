@@ -133,7 +133,7 @@ export default function Home() {
 
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Business");
-
+  const [adminRole, setAdminRole] = useState("");
   const [currentRate, setCurrentRate] = useState<number | null>(null);
   const [rateUpdatedAt, setRateUpdatedAt] = useState<string | null>(null);
   const [newRate, setNewRate] = useState("");
@@ -174,7 +174,7 @@ export default function Home() {
 
         setBusinessId(adminBusiness.businessId);
         setBusinessName(adminBusiness.businessName);
-
+        setAdminRole(adminBusiness.role);
         const supabase = createClient();
 
         const { data: rateData, error: rateQueryError } = await supabase
@@ -1375,29 +1375,71 @@ export default function Home() {
                 )}
               </section>
             )}
-            {active === "Settings" && (
+                        {active === "Settings" && (
               <section>
                 <h2 className="text-2xl font-bold">Business Settings</h2>
 
                 <p className="mt-1 text-slate-500">
-                  View your business profile.
+                  View your business account information.
                 </p>
 
                 <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <label className="text-sm font-medium">
-                    Business Name
-                  </label>
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Business Profile
+                  </h3>
 
-                  <input
-                    value={businessName}
-                    readOnly
-                    className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
-                  />
-
-                  <p className="mt-4 text-sm text-slate-500">
-                    Business profile editing will be available when business
-                    settings management is connected.
+                  <p className="mt-1 text-sm text-slate-500">
+                    Information associated with your BusinessFlow account.
                   </p>
+
+                  <div className="mt-6 space-y-5">
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Business Name
+                      </label>
+
+                      <input
+                        value={businessName}
+                        readOnly
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Business ID
+                      </label>
+
+                      <input
+                        value={businessId ?? "Loading..."}
+                        readOnly
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Your Role
+                      </label>
+
+                      <input
+                        value={
+                          adminRole
+                            ? adminRole.charAt(0).toUpperCase() +
+                              adminRole.slice(1)
+                            : "Loading..."
+                        }
+                        readOnly
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-6 border-t border-slate-100 pt-4">
+                    <p className="text-sm text-slate-500">
+                      Business account details are currently read-only.
+                    </p>
+                  </div>
                 </div>
               </section>
             )}
