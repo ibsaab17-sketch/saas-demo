@@ -552,6 +552,30 @@ export default function Home() {
     0
   );
 
+  const reportTotalTransactions = transactions.length;
+
+  const reportTotalVolumeCad = transactions.reduce(
+    (total, transaction) => total + transaction.sendAmountCad,
+    0
+  );
+
+  const reportCompletedTransactions = transactions.filter(
+    (transaction) => transaction.status.toLowerCase() === "completed"
+  ).length;
+
+  const reportProcessingTransactions = transactions.filter(
+    (transaction) => transaction.status.toLowerCase() === "processing"
+  ).length;
+
+  const reportPendingTransactions = transactions.filter(
+    (transaction) => transaction.status.toLowerCase() === "pending"
+  ).length;
+
+  const reportCompletionRate =
+    reportTotalTransactions > 0
+      ? (reportCompletedTransactions / reportTotalTransactions) * 100
+      : 0;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex min-h-screen">
@@ -1259,22 +1283,96 @@ export default function Home() {
             )}
             {active === "Reports" && (
               <section>
-                <h2 className="text-2xl font-bold">Reports</h2>
-
-                <p className="mt-1 text-slate-500">
-                  Business performance and operational reporting.
-                </p>
-
-                <div className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    Business reports
-                  </h3>
-
-                  <p className="mt-2 text-sm text-slate-500">
-                    Reporting will be available here when the reporting service
-                    is connected to your business data.
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold">Reports</h2>
+                  <p className="mt-1 text-slate-500">
+                    Business performance based on your transaction activity.
                   </p>
                 </div>
+
+                {transactionsLoading && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
+                    Loading report data...
+                  </div>
+                )}
+
+                {transactionsError && (
+                  <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                    {transactionsError}
+                  </div>
+                )}
+
+                {!transactionsLoading && !transactionsError && (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <Card
+                        title="Total Transactions"
+                        value={reportTotalTransactions.toString()}
+                        note="All transactions for this business"
+                      />
+                      <Card
+                        title="Total Volume"
+                        value={`$${reportTotalVolumeCad.toLocaleString("en-CA", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} CAD`}
+                        note="Total submitted transfer amount"
+                      />
+                      <Card
+                        title="Completed"
+                        value={reportCompletedTransactions.toString()}
+                        note="Transactions marked completed"
+                      />
+                      <Card
+                        title="Completion Rate"
+                        value={`${reportCompletionRate.toFixed(1)}%`}
+                        note="Completed transactions as a share of total"
+                      />
+                    </div>
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-slate-500">Pending</p>
+                        <p className="mt-2 text-3xl font-semibold text-slate-900">
+                          {reportPendingTransactions}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Waiting to move forward
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-slate-500">Processing</p>
+                        <p className="mt-2 text-3xl font-semibold text-slate-900">
+                          {reportProcessingTransactions}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Currently being processed
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <p className="text-sm text-slate-500">Today&apos;s Volume</p>
+                        <p className="mt-2 text-3xl font-semibold text-slate-900">
+                          ${todaysVolumeCad.toLocaleString("en-CA", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })} CAD
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {todaysTransactions.length} transaction
+                          {todaysTransactions.length === 1 ? "" : "s"} created today
+                        </p>
+                      </div>
+                    </div>
+
+                    {reportTotalTransactions === 0 && (
+                      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+                        No transaction activity is available for this business yet.
+                      </div>
+                    )}
+                  </>
+                )}
               </section>
             )}
             {active === "Settings" && (
