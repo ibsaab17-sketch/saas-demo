@@ -462,12 +462,13 @@ export async function POST(
       !Number.isFinite(
         sendAmountCad,
       ) ||
-      sendAmountCad <= 0
+              sendAmountCad < 10 ||
+      sendAmountCad > 5000
     ) {
       return NextResponse.json(
         {
           error:
-            "Enter a valid send amount.",
+        "Send amount must be between $10 and $5,000 CAD.",
         },
         {
           status: 400,
