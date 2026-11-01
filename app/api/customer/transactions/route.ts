@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "../../../../utils/supabase/admin";
 import { createClient } from "../../../../utils/supabase/server";
-
+import { checkRateLimit } from "../../../../utils/rate-limit";
 type CreateTransactionBody = {
   recipientId?: unknown;
   sendAmountCad?: unknown;
@@ -68,7 +68,6 @@ export async function GET() {
         },
       );
     }
-
     const admin =
       createAdminClient();
 
@@ -401,7 +400,26 @@ export async function POST(
         },
       );
     }
+const rateLimit = await checkRateLimit({
+  key: `customer-transaction:${user.id}`,
+  limit: 10,
+  windowSeconds: 60,
+});
 
+if (!rateLimit.allowed) {
+  return NextResponse.json(
+    {
+      error:
+        "Too many transaction requests. Please wait a moment and try again.",
+    },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": "60",
+      },
+    },
+  );
+}
     /*
      * Only accept values the customer
      * is allowed to control.
