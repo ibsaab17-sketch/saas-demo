@@ -29,17 +29,20 @@ export async function signInWithSupabase(
 ): Promise<SupabaseCustomerSession> {
   const supabase = createClient();
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password,
-  });
+  const { data, error } =
+    await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
   if (error) {
     throw new Error(error.message);
   }
 
   if (!data.user) {
-    throw new Error("Sign in failed. Please try again.");
+    throw new Error(
+      "Sign in failed. Please try again.",
+    );
   }
 
   return {
@@ -56,58 +59,41 @@ export async function signUpWithSupabase(
   password: string,
   businessSlug: string,
 ): Promise<void> {
-  const supabase = createClient();
+  const response = await fetch(
+    "/api/customer/register",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        phone,
+        password,
+        businessSlug,
+      }),
+    },
+  );
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedBusinessSlug = businessSlug.trim().toLowerCase();
+  const result =
+    (await response.json()) as {
+      success?: boolean;
+      error?: string;
+      requiresEmailConfirmation?: boolean;
+    };
 
-  if (!normalizedBusinessSlug) {
+  if (!response.ok) {
     throw new Error(
-      "A business is required to create your customer account.",
+      result.error ||
+        "Could not create your account. Please try again.",
     );
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/customer/auth/confirm`,
-      data: {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone: phone.trim() || null,
-        business_slug: normalizedBusinessSlug,
-      },
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (!data.user) {
-    throw new Error("Account creation failed. Please try again.");
-  }
-
-  // Supabase email confirmation is enabled.
-  // If there is no session yet, the customer confirms their email first.
-  if (!data.session) {
-    return;
-  }
-
-  const { error: profileError } = await supabase.rpc("register_customer", {
-    p_business_slug: normalizedBusinessSlug,
-    p_first_name: firstName.trim(),
-    p_last_name: lastName.trim(),
-    p_email: normalizedEmail,
-    p_phone: phone.trim() || null,
-  });
-
-  if (profileError) {
-    await supabase.auth.signOut();
-
+  if (!result.success) {
     throw new Error(
-      `Your account was created, but the customer profile could not be created: ${profileError.message}`,
+      "Account creation failed. Please try again.",
     );
   }
 }
@@ -115,7 +101,8 @@ export async function signUpWithSupabase(
 export async function signOutFromSupabase(): Promise<void> {
   const supabase = createClient();
 
-  const { error } = await supabase.auth.signOut();
+  const { error } =
+    await supabase.auth.signOut();
 
   if (error) {
     throw new Error(error.message);
