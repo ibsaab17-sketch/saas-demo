@@ -27,7 +27,70 @@ function extensionForFile(file: File) {
       return null;
   }
 }
+function hasValidFileSignature(
+  fileBuffer: Buffer,
+  mimeType: string,
+) {
+  if (mimeType === "image/jpeg") {
+    return (
+      fileBuffer.length >= 3 &&
+      fileBuffer[0] === 0xff &&
+      fileBuffer[1] === 0xd8 &&
+      fileBuffer[2] === 0xff
+    );
+  }
 
+  if (mimeType === "image/png") {
+    const pngSignature = [
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+    ];
+
+    return (
+      fileBuffer.length >=
+        pngSignature.length &&
+      pngSignature.every(
+        (byte, index) =>
+          fileBuffer[index] === byte,
+      )
+    );
+  }
+
+  if (mimeType === "image/webp") {
+    return (
+      fileBuffer.length >= 12 &&
+      fileBuffer.toString(
+        "ascii",
+        0,
+        4,
+      ) === "RIFF" &&
+      fileBuffer.toString(
+        "ascii",
+        8,
+        12,
+      ) === "WEBP"
+    );
+  }
+
+  if (mimeType === "application/pdf") {
+    return (
+      fileBuffer.length >= 5 &&
+      fileBuffer.toString(
+        "ascii",
+        0,
+        5,
+      ) === "%PDF-"
+    );
+  }
+
+  return false;
+}
 export async function POST(
   request: Request,
   context: {
@@ -318,7 +381,24 @@ export async function POST(
     const fileBuffer =
       Buffer.from(
         await uploadedFile.arrayBuffer(),
+        );
+    if (
+      !hasValidFileSignature(
+        fileBuffer,
+        uploadedFile.type,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "The uploaded file content does not match its declared file type.",
+        },
+        {
+          status: 400,
+        },
       );
+    }
+      
 
     /*
      * 7. Upload to the PRIVATE bucket.
