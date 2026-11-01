@@ -1,3 +1,4 @@
+import { checkRateLimit } from "../../../../../../utils/rate-limit";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "../../../../../../utils/supabase/admin";
@@ -123,7 +124,26 @@ export async function POST(
         },
       );
     }
+const rateLimit = await checkRateLimit({
+  key: `customer-payment-proof:${user.id}`,
+  limit: 5,
+  windowSeconds: 60,
+});
 
+if (!rateLimit.allowed) {
+  return NextResponse.json(
+    {
+      error:
+        "Too many payment proof uploads. Please wait a moment and try again.",
+    },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": "60",
+      },
+    },
+  );
+}
     const { id: transactionId } =
       await context.params;
 
