@@ -27,27 +27,46 @@ export async function signInWithSupabase(
   email: string,
   password: string,
 ): Promise<SupabaseCustomerSession> {
-  const supabase = createClient();
+  const response = await fetch(
+    "/api/customer/login",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    },
+  );
 
-  const { data, error } =
-    await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+  const result =
+    (await response.json()) as {
+      success?: boolean;
+      error?: string;
+      user?: {
+        id: string;
+        email: string;
+      };
+    };
 
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok) {
+    throw new Error(
+      result.error ||
+        "Sign in failed. Please try again.",
+    );
   }
 
-  if (!data.user) {
+  if (!result.user) {
     throw new Error(
       "Sign in failed. Please try again.",
     );
   }
 
   return {
-    userId: data.user.id,
-    email: data.user.email ?? "",
+    userId: result.user.id,
+    email: result.user.email,
   };
 }
 
